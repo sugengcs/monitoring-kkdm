@@ -110,12 +110,12 @@ const Dashboard = () => {
     fetchAssets();
     fetchReports();
 
-    // Poll for realtime updates every 10 seconds
+    // Poll for realtime updates every 5 seconds
     const interval = setInterval(() => {
       fetchStats();
       fetchAssets();
       fetchReports();
-    }, 10000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [selectedMonth, selectedWeek, selectedYear, selectedStatus]);
@@ -324,13 +324,13 @@ const Dashboard = () => {
         break;
       case 'sedang_perbaikan':
         filteredData = reports
-          .filter(r => r.status === 'dalam_perbaikan')
+          .filter(r => r.status === 'diproses' || r.status === 'dalam_perbaikan')
           .map((report, index) => ({
             no: index + 1,
             name: report.report_number || '-',
             category: report.asset_name || '-',
             location: report.location || '-',
-            status: 'Sedang Perbaikan',
+            status: r.status === 'diproses' ? 'Diproses' : 'Sedang Perbaikan',
             date: report.reported_at ? new Date(report.reported_at).toLocaleDateString('id-ID') : '-',
             technician: report.technician || '-',
             notes: report.description || '-'
@@ -601,7 +601,6 @@ const Dashboard = () => {
         {/* Repair Report Summary - Bottom bar */}
         <div className="flex-shrink-0">
           <RepairReportSummary
-            onSedangPerbaikanClick={() => handleCardClick('sedang_perbaikan')}
             onSelesaiClick={() => handleCardClick('selesai')}
             onBelumSelesaiClick={() => handleCardClick('belum_selesai')}
           />

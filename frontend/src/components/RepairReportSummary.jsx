@@ -70,15 +70,7 @@ const RepairReportSummary = ({ onSedangPerbaikanClick, onSelesaiClick, onBelumSe
   return (
     <div className="flex flex-col gap-4">
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
-        <SummaryCard
-          title="Sedang Perbaikan"
-          value={totals?.total_perbaikan}
-          icon={Wrench}
-          color="text-[#F59E0B]"
-          bgColor="bg-[#F59E0B]"
-          onClick={onSedangPerbaikanClick}
-        />
+      <div className="grid grid-cols-2 gap-4">
         <SummaryCard
           title="Selesai"
           value={totals?.total_selesai}
