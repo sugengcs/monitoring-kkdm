@@ -33,22 +33,32 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (username, password) => {
-    try {
-      const response = await api.post('/auth/login', { username, password });
-      const { token: newToken, user: userData } = response.data;
-      localStorage.setItem('token', newToken);
-      setToken(newToken);
-      setUser(userData);
-      return { success: true };
-    } catch (error) {
-      console.error('Login error:', error);
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Login failed' 
-      };
-    }
+const login = async (username, password) => {
+
+  // LOGIN SEMENTARA UNTUK VERCEL
+  if (username === 'admin' && password === 'admin123') {
+
+    const userData = {
+      username: 'admin',
+      role: 'admin'
+    };
+
+    const newToken = 'dummy-token';
+
+    localStorage.setItem('token', newToken);
+    localStorage.setItem('user', JSON.stringify(userData));
+
+    setToken(newToken);
+    setUser(userData);
+
+    return { success: true };
+  }
+
+  return {
+    success: false,
+    message: 'Login failed'
   };
+};
 
   const logout = () => {
     localStorage.removeItem('token');
