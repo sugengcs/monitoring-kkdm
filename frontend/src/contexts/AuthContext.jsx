@@ -1,37 +1,37 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../utils/api';
 
-const AuthContext = createContext(null);
+
+const AuthContext = createContext({
+  user: null,
+  setUser: () => {},
+  loading: false,
+  token: null,
+});
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem('token'));
 
-  useEffect(() => {
-    if (token) {
-      fetchUser();
-    } else {
-      setLoading(false);
-    }
-  }, [token]);
+  const [user, setUser] = useState(() => {
 
-  const fetchUser = async () => {
-    try {
-      const response = await api.get('/auth/me');
-      setUser(response.data.user);
-    } catch (error) {
-      console.error('Fetch user error:', error);
-      // Only remove token on 401 (unauthorized) errors, not network errors
-      if (error.response?.status === 401) {
-        localStorage.removeItem('token');
-        setToken(null);
-        setUser(null);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+    const savedUser = localStorage.getItem('user');
+
+    return savedUser ? JSON.parse(savedUser) : null;
+
+  });
+
+  const [loading, setLoading] = useState(false);
+
+  const [token, setToken] = useState(
+    localStorage.getItem('token')
+  );
+
+  return (
+    <AuthContext.Provider value={{ user, setUser, loading, token }}>
+      {children}
+    </AuthContext.Provider>
+  );
+
+};
 
 const login = async (username, password) => {
 
