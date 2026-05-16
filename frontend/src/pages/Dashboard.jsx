@@ -1,13 +1,13 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-  LayoutDashboard, 
-  AlertTriangle, 
-  Wrench, 
-  CheckCircle, 
+import {
+  LayoutDashboard,
+  AlertTriangle,
+  Wrench,
+  CheckCircle,
   TrendingUp,
   Activity,
   Map,
@@ -113,7 +113,6 @@ const Dashboard = () => {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedWeek, setSelectedWeek] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailModalTitle, setDetailModalTitle] = useState('');
   const [detailModalAssets, setDetailModalAssets] = useState([]);
@@ -123,6 +122,101 @@ const Dashboard = () => {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
+
+  // Asset type filter state
+  const [selectedAssetTypes, setSelectedAssetTypes] = useState([
+    'CCTV',
+    'SFO',
+    'LAMPU PJU',
+    'PANEL',
+    'KWH'
+  ]);
+
+  // Helper function to normalize asset category name to standard type
+  const normalizeAssetType = (categoryName) => {
+    if (!categoryName) return null;
+    const upper = categoryName.toUpperCase();
+    if (upper.includes('CCTV') || upper.includes('PENGAWAS') || upper.includes('KAMERA')) return 'CCTV';
+    if (upper.includes('SFO')) return 'SFO';
+    if (upper.includes('LAMPU') || upper.includes('PJU')) return 'LAMPU PJU';
+    if (upper.includes('PANEL')) return 'PANEL';
+    if (upper.includes('KWH')) return 'KWH';
+    return null;
+  };
+
+  // Get unique asset types from current assets
+  const getAvailableAssetTypes = () => {
+    const types = new Set();
+    assets.forEach(asset => {
+      const type = normalizeAssetType(asset.category_name);
+      if (type) types.add(type);
+    });
+    return Array.from(types);
+  };
+
+  // Handle checkbox change
+  const handleAssetTypeToggle = (type) => {
+    setSelectedAssetTypes(prev =>
+      prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    );
+  };
+
+  // Select all asset types
+  const handleSelectAllTypes = () => {
+    const availableTypes = getAvailableAssetTypes();
+    setSelectedAssetTypes(availableTypes);
+  };
+
+  // Reset filter to all types
+  const handleResetFilter = () => {
+    setSelectedAssetTypes(['CCTV', 'SFO', 'LAMPU PJU', 'PANEL', 'KWH']);
+  };
+
+  // Filter assets based on all selected filters (asset type, month, week, year)
+  const filteredAssets = useMemo(() => {
+    return assets.filter(asset => {
+      // Filter by asset type
+      const assetType = normalizeAssetType(asset.category_name);
+      const matchType = assetType && selectedAssetTypes.includes(assetType);
+
+      if (!matchType) return false;
+
+      // Filter by month
+      if (selectedMonth) {
+        const assetDate = new Date(asset.created_at || asset.installed_at);
+        const assetMonth = assetDate.getMonth() + 1;
+        if (assetMonth !== parseInt(selectedMonth)) return false;
+      }
+
+      // Filter by week
+      if (selectedWeek) {
+        const assetDate = new Date(asset.created_at || asset.installed_at);
+        const weekNumber = Math.ceil(assetDate.getDate() / 7);
+        if (weekNumber !== parseInt(selectedWeek)) return false;
+      }
+
+      // Filter by year
+      if (selectedYear) {
+        const assetDate = new Date(asset.created_at || asset.installed_at);
+        const assetYear = assetDate.getFullYear();
+        if (assetYear !== parseInt(selectedYear)) return false;
+      }
+
+      return true;
+    });
+  }, [assets, selectedAssetTypes, selectedMonth, selectedWeek, selectedYear]);
+
+  // Calculate statistics from filtered assets
+  const filteredStats = useMemo(() => {
+    return {
+      total: filteredAssets.length,
+      baik: filteredAssets.filter(a => a.condition_status === 'baik' || a.condition_status === 'selesai_diperbaiki').length,
+      rusak: filteredAssets.filter(a => a.condition_status === 'rusak_ringan' || a.condition_status === 'rusak_berat').length,
+      sedangPerbaikan: filteredAssets.filter(a => a.condition_status === 'sedang_diperbaiki').length,
+    };
+  }, [filteredAssets]);
 
   useEffect(() => {
     fetchStats();
@@ -137,7 +231,7 @@ const Dashboard = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [selectedMonth, selectedWeek, selectedYear, selectedStatus]);
+  }, [selectedMonth, selectedWeek, selectedYear]);
 
   useEffect(() => {
     const handleOpenReportDetail = (event) => {
@@ -201,9 +295,9 @@ const Dashboard = () => {
     markersRef.current.forEach(m => map.removeLayer(m));
     markersRef.current = [];
 
-    if (assets.length === 0) return;
+    if (filteredAssets.length === 0) return;
 
-    assets.forEach(asset => {
+    filteredAssets.forEach(asset => {
       const lat = parseFloat(asset.location_lat);
       const lng = parseFloat(asset.location_lng);
       if (isNaN(lat) || isNaN(lng)) return;
@@ -219,7 +313,7 @@ const Dashboard = () => {
       markersRef.current.push(circle);
     });
 
-    const validPoints = assets
+    const validPoints = filteredAssets
       .map(a => [parseFloat(a.location_lat), parseFloat(a.location_lng)])
       .filter(([lat, lng]) => !isNaN(lat) && !isNaN(lng));
     if (validPoints.length > 0) {
@@ -233,7 +327,7 @@ const Dashboard = () => {
 
     // Re-invalidate after markers are drawn
     setTimeout(() => map.invalidateSize(), 200);
-  }, [assets]);
+  }, [filteredAssets]);
 
   const fetchStats = async () => {
     try {
@@ -292,7 +386,7 @@ const Dashboard = () => {
 
   const fetchReports = async () => {
     try {
-      const response = await api.get('/reports', { params: { limit: 20, status: selectedStatus || undefined } });
+      const response = await api.get('/reports', { params: { limit: 20 } });
       setReports(response.data.data || []);
     } catch (error) {
       console.error('Error fetching reports:', error);
@@ -309,7 +403,7 @@ const Dashboard = () => {
 
     switch (cardType) {
       case 'total':
-        filteredData = assets.map((asset, index) => ({
+        filteredData = filteredAssets.map((asset, index) => ({
           no: index + 1,
           name: asset.name || '-',
           category: asset.category_name || '-',
@@ -322,7 +416,7 @@ const Dashboard = () => {
         title = 'Total Aset';
         break;
       case 'baik':
-        filteredData = assets
+        filteredData = filteredAssets
           .filter(a => a.condition_status === 'baik' || a.condition_status === 'selesai_diperbaiki')
           .map((asset, index) => ({
             no: index + 1,
@@ -337,7 +431,7 @@ const Dashboard = () => {
         title = 'Kondisi Baik';
         break;
       case 'rusak':
-        filteredData = assets
+        filteredData = filteredAssets
           .filter(a => a.condition_status === 'rusak_ringan' || a.condition_status === 'rusak_berat')
           .map((asset, index) => ({
             no: index + 1,
@@ -352,14 +446,14 @@ const Dashboard = () => {
         title = 'Kondisi Rusak';
         break;
       case 'perbaikan':
-        filteredData = assets
+        filteredData = filteredAssets
           .filter(a => a.condition_status === 'sedang_diperbaiki')
           .map((asset, index) => ({
             no: index + 1,
             name: asset.name || '-',
             category: asset.category_name || '-',
             location: asset.ruas || '-',
-            status: 'Perbaikan',
+            status: 'Dalam Perbaikan',
             date: asset.created_at ? new Date(asset.created_at).toLocaleDateString('id-ID') : '-',
             technician: '-',
             notes: '-'
@@ -424,7 +518,7 @@ const Dashboard = () => {
     if (!map) return;
 
     const categoryMarkers = markersRef.current.filter((marker, index) => {
-      const asset = assets[index];
+      const asset = filteredAssets[index];
       return asset && asset.category_name === category;
     });
 
@@ -483,88 +577,135 @@ const Dashboard = () => {
       )}
       
       {/* Header */}
-      <div className="flex-shrink-0 bg-[#0F172A]/80 backdrop-blur-xl px-6 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center">
-            <h1 className="text-2xl font-bold text-white tracking-tight">Monitoring Aset Jalan Tol Becakayu</h1>
+      <div className="flex-shrink-0 bg-[#0F172A]/80 backdrop-blur-xl px-4 md:px-6 py-4">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-6">
+          {/* Title */}
+          <div className="flex items-center min-w-0 flex-shrink-0">
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight truncate">Monitoring Aset Jalan Tol Becakayu</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50"
-            >
-              <option value="">Semua Bulan</option>
-              <option value="1">Jan</option>
-              <option value="2">Feb</option>
-              <option value="3">Mar</option>
-              <option value="4">Apr</option>
-              <option value="5">Mei</option>
-              <option value="6">Jun</option>
-              <option value="7">Jul</option>
-              <option value="8">Ags</option>
-              <option value="9">Sep</option>
-              <option value="10">Okt</option>
-              <option value="11">Nov</option>
-              <option value="12">Des</option>
-            </select>
-            <select
-              value={selectedWeek}
-              onChange={(e) => setSelectedWeek(e.target.value)}
-              className="px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50"
-            >
-              <option value="">Semua Minggu</option>
-              <option value="1">M1</option>
-              <option value="2">M2</option>
-              <option value="3">M3</option>
-              <option value="4">M4</option>
-            </select>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50"
-            >
-              <option value="">Semua Tahun</option>
-              {[2024, 2025, 2026, 2027].map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50"
-            >
-              <option value="">Semua Status</option>
-              <option value="pending">Pending</option>
-              <option value="diproses">Diproses</option>
-              <option value="dalam_perbaikan">Perbaikan</option>
-              <option value="selesai">Selesai</option>
-              <option value="ditolak">Ditolak</option>
-            </select>
+
+          {/* Filter Section */}
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 justify-start lg:justify-end w-full lg:w-auto min-w-0">
+            {/* Date Filters */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="px-2 md:px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-[10px] md:text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50 min-w-[80px] md:min-w-[100px] whitespace-nowrap"
+              >
+                <option value="">Bulan</option>
+                <option value="1">Jan</option>
+                <option value="2">Feb</option>
+                <option value="3">Mar</option>
+                <option value="4">Apr</option>
+                <option value="5">Mei</option>
+                <option value="6">Jun</option>
+                <option value="7">Jul</option>
+                <option value="8">Ags</option>
+                <option value="9">Sep</option>
+                <option value="10">Okt</option>
+                <option value="11">Nov</option>
+                <option value="12">Des</option>
+              </select>
+              <select
+                value={selectedWeek}
+                onChange={(e) => setSelectedWeek(e.target.value)}
+                className="px-2 md:px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-[10px] md:text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50 min-w-[70px] md:min-w-[90px] whitespace-nowrap"
+              >
+                <option value="">Minggu</option>
+                <option value="1">M1</option>
+                <option value="2">M2</option>
+                <option value="3">M3</option>
+                <option value="4">M4</option>
+              </select>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="px-2 md:px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-[10px] md:text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50 min-w-[80px] md:min-w-[100px] whitespace-nowrap"
+              >
+                <option value="">Tahun</option>
+                {[2024, 2025, 2026, 2027].map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Separator */}
+            <div className="hidden md:block w-px h-6 bg-white/10 flex-shrink-0"></div>
+
+            {/* Asset Type Filter */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-1 md:gap-2">
+                <button
+                  onClick={handleSelectAllTypes}
+                  className="px-2 py-1 text-[10px] bg-[#3B82F6]/20 hover:bg-[#3B82F6]/30 text-[#3B82F6] rounded transition-colors whitespace-nowrap"
+                >
+                  Semua
+                </button>
+                <button
+                  onClick={handleResetFilter}
+                  className="px-2 py-1 text-[10px] bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors whitespace-nowrap"
+                >
+                  Reset
+                </button>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {['CCTV', 'SFO', 'LAMPU PJU', 'PANEL', 'KWH'].map(type => {
+                  const isSelected = selectedAssetTypes.includes(type);
+                  const color = getCategoryColor(type);
+                  const typeAssets = assets.filter(asset => normalizeAssetType(asset.category_name) === type);
+                  if (typeAssets.length === 0) return null;
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => handleAssetTypeToggle(type)}
+                      className={`px-2 py-1 text-[10px] rounded transition-colors flex items-center gap-1 flex-shrink-0 ${
+                        isSelected
+                          ? 'text-white'
+                          : 'text-gray-400'
+                      }`}
+                      style={{
+                        backgroundColor: isSelected ? `${color}40` : 'rgba(17, 24, 39, 0.8)',
+                        border: isSelected ? `1px solid ${color}` : '1px solid rgba(255,255,255,0.1)'
+                      }}
+                    >
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                      <span className="hidden sm:inline">{type}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Refresh Button */}
             <button
               onClick={() => { fetchAssets(); fetchStats(); }}
-              className="px-4 py-1.5 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-xl text-xs transition-all duration-200 shadow-lg shadow-[#3B82F6]/20"
+              className="px-3 md:px-4 py-1.5 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-xl text-[10px] md:text-xs transition-all duration-200 shadow-lg shadow-[#3B82F6]/20 flex-shrink-0 whitespace-nowrap"
             >
               Refresh
             </button>
-            <NotificationCenter />
-            <ProfileDropdown
-              onProfileClick={() => setProfileModalOpen(true)}
-              onSettingsClick={handleSettingsClick}
-              onPasswordClick={handlePasswordClick}
-              onLogout={handleLogout}
-            />
+
+            {/* Profile & Notification */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <NotificationCenter />
+              <ProfileDropdown
+                onProfileClick={() => setProfileModalOpen(true)}
+                onSettingsClick={handleSettingsClick}
+                onPasswordClick={handlePasswordClick}
+                onLogout={handleLogout}
+              />
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden p-5 gap-5">
-        {/* Statistics Cards - computed from assets/reports state */}
+        {/* Statistics Cards - computed from filtered assets */}
         <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
           <StatCard
             title="Total Aset"
-            value={assets.length}
+            value={filteredStats.total}
             icon={LayoutDashboard}
             color="#3B82F6"
             gradient="gradient-primary"
@@ -572,7 +713,7 @@ const Dashboard = () => {
           />
           <StatCard
             title="Kondisi Baik"
-            value={assets.filter(a => a.condition_status === 'baik' || a.condition_status === 'selesai_diperbaiki').length}
+            value={filteredStats.baik}
             icon={CheckCircle}
             color="#22C55E"
             gradient="gradient-success"
@@ -580,7 +721,7 @@ const Dashboard = () => {
           />
           <StatCard
             title="Kondisi Rusak"
-            value={assets.filter(a => a.condition_status === 'rusak_ringan' || a.condition_status === 'rusak_berat').length}
+            value={filteredStats.rusak}
             icon={AlertTriangle}
             color="#EF4444"
             gradient="gradient-danger"
@@ -588,7 +729,7 @@ const Dashboard = () => {
           />
           <StatCard
             title="Dalam Perbaikan"
-            value={assets.filter(a => a.condition_status === 'sedang_diperbaiki').length}
+            value={filteredStats.sedangPerbaikan}
             icon={Wrench}
             color="#F59E0B"
             gradient="gradient-warning"
@@ -604,39 +745,9 @@ const Dashboard = () => {
           />
         </div>
 
-        {/* Middle Section: Map with Legend */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-8 gap-3 md:gap-5 min-h-0">
-          {/* Legend - More Compact */}
-          <div className="md:col-span-1 glass-card p-2 md:p-3 flex flex-col overflow-y-auto hidden md:flex">
-            <h2 className="text-xs font-semibold text-white mb-2 md:mb-3 flex items-center gap-2">
-              <Activity className="w-3 h-3 text-[#3B82F6]" />
-              Jenis Aset
-            </h2>
-            <div className="space-y-1 md:space-y-1.5">
-              {[...new Set(assets.map(a => a.category_name).filter(Boolean))].map(cat => {
-                const count = assets.filter(a => a.category_name === cat).length;
-                const color = getCategoryColor(cat);
-                let displayName = cat.toUpperCase();
-                displayName = displayName.replace(/PENGAWAS/g, 'CCTV').replace(/KAMERA/g, 'CCTV').replace(/PJU/g, 'LAMPU PJU');
-                return (
-                  <div
-                    key={cat}
-                    onClick={() => handleLegendClick(cat)}
-                    className="flex items-center gap-2 p-1 md:p-1.5 hover:bg-gray-800/50 rounded-lg transition-colors cursor-pointer"
-                  >
-                    <div className="w-2 h-2 md:w-2.5 md:h-2.5 rounded-full border-2 border-white" style={{ backgroundColor: color }} />
-                    <div className="flex-1">
-                      <p className="text-[10px] md:text-xs text-white font-medium truncate">{displayName}</p>
-                      <p className="text-[8px] md:text-[9px] text-gray-400">{count} titik</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Map - Larger */}
-          <div className="col-span-1 md:col-span-7 lg:col-span-7 glass-card p-0 overflow-hidden relative">
+        {/* Middle Section: Map */}
+        <div className="flex-1 min-h-0">
+          <div className="glass-card p-0 overflow-hidden relative h-full">
             <div
               ref={mapContainerRef}
               className="w-full h-full min-h-[300px] md:min-h-[400px] lg:min-h-[500px]"

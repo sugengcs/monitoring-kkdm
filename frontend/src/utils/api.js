@@ -1,44 +1,48 @@
 import axios from 'axios';
 
+console.log('VITE_API_URL =', import.meta.env.VITE_API_URL);
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: `${import.meta.env.VITE_API_URL}/api`,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add token
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`, config.params || config.data);
+
+    console.log(
+      `[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`
+    );
+
     return config;
   },
   (error) => {
-    console.error('[API] Request error:', error);
+    console.error('[API] Request Error:', error);
     return Promise.reject(error);
   }
 );
 
-// Response interceptor for error handling
+// Response interceptor
 api.interceptors.response.use(
   (response) => {
-    console.log(`[API] Response ${response.config.url}:`, response.status, response.data?.success ? 'SUCCESS' : 'FAILED');
+    console.log('[API] Response:', response.status, response.data);
     return response;
   },
   (error) => {
-    console.error('[API] Response error:', {
-      url: error.config?.url,
-      method: error.config?.method?.toUpperCase(),
+    console.error('[API] Response Error:', {
       status: error.response?.status,
       message: error.response?.data?.message || error.message,
-      data: error.response?.data
+      url: error.config?.url,
     });
-    // Don't auto-logout on 401 errors - let the AuthContext handle it
-    // Only redirect to login on explicit logout action
+
     return Promise.reject(error);
   }
 );
