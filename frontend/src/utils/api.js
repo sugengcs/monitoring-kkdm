@@ -1,10 +1,16 @@
+
 import axios from 'axios';
 
-const resolvedBase = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api`
-  : '/api';
+const resolvedBase =
+  import.meta.env.VITE_API_URL ||
+  'http://localhost:5000/api';
 
-console.log('VITE_API_URL =', import.meta.env.VITE_API_URL, '→ baseURL =', resolvedBase);
+console.log(
+  'VITE_API_URL =',
+  import.meta.env.VITE_API_URL,
+  '→ baseURL =',
+  resolvedBase
+);
 
 const api = axios.create({
   baseURL: resolvedBase,
