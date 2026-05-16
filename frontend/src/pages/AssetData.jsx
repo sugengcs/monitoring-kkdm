@@ -107,10 +107,12 @@ const AssetData = () => {
       const response = await api.get('/assets', {
         params: { search, category, condition, month, year, page, limit: 10 }
       });
-      setAssets(response.data.data);
-      setPagination(response.data.pagination);
+      setAssets(response.data.data || []);
+      setPagination(response.data.pagination || {});
     } catch (error) {
       console.error('Error fetching assets:', error);
+      setAssets([]);
+      setPagination({});
     } finally {
       setLoading(false);
     }
@@ -521,7 +523,7 @@ const AssetData = () => {
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
                   </td>
                 </tr>
-              ) : assets.length === 0 ? (
+              ) : !assets || assets.length === 0 ? (
                 <tr>
                   <td colSpan="10" className="px-6 py-8 text-center text-gray-400">
                     Tidak ada data aset

@@ -176,36 +176,80 @@ const Dashboard = () => {
 
   // Filter assets based on all selected filters (asset type, month, week, year)
   const filteredAssets = useMemo(() => {
-    return assets.filter(asset => {
+    console.log('[Dashboard] Filtering assets:', {
+      totalAssets: assets.length,
+      selectedAssetTypes,
+      selectedMonth,
+      selectedWeek,
+      selectedYear
+    });
+
+    const filtered = assets.filter(asset => {
       // Filter by asset type
       const assetType = normalizeAssetType(asset.category_name);
       const matchType = assetType && selectedAssetTypes.includes(assetType);
 
-      if (!matchType) return false;
+      if (!matchType) {
+        console.log('[Dashboard] Asset filtered by type:', {
+          assetName: asset.name,
+          categoryName: asset.category_name,
+          normalizedType: assetType,
+          selectedTypes: selectedAssetTypes
+        });
+        return false;
+      }
 
       // Filter by month
       if (selectedMonth) {
         const assetDate = new Date(asset.created_at || asset.installed_at);
         const assetMonth = assetDate.getMonth() + 1;
-        if (assetMonth !== parseInt(selectedMonth)) return false;
+        if (assetMonth !== parseInt(selectedMonth)) {
+          console.log('[Dashboard] Asset filtered by month:', {
+            assetName: asset.name,
+            assetMonth,
+            selectedMonth
+          });
+          return false;
+        }
       }
 
       // Filter by week
       if (selectedWeek) {
         const assetDate = new Date(asset.created_at || asset.installed_at);
         const weekNumber = Math.ceil(assetDate.getDate() / 7);
-        if (weekNumber !== parseInt(selectedWeek)) return false;
+        if (weekNumber !== parseInt(selectedWeek)) {
+          console.log('[Dashboard] Asset filtered by week:', {
+            assetName: asset.name,
+            weekNumber,
+            selectedWeek
+          });
+          return false;
+        }
       }
 
       // Filter by year
       if (selectedYear) {
         const assetDate = new Date(asset.created_at || asset.installed_at);
         const assetYear = assetDate.getFullYear();
-        if (assetYear !== parseInt(selectedYear)) return false;
+        if (assetYear !== parseInt(selectedYear)) {
+          console.log('[Dashboard] Asset filtered by year:', {
+            assetName: asset.name,
+            assetYear,
+            selectedYear
+          });
+          return false;
+        }
       }
 
       return true;
     });
+
+    console.log('[Dashboard] Filtered assets result:', {
+      filteredCount: filtered.length,
+      originalCount: assets.length
+    });
+
+    return filtered;
   }, [assets, selectedAssetTypes, selectedMonth, selectedWeek, selectedYear]);
 
   // Calculate statistics from filtered assets
@@ -577,23 +621,23 @@ const Dashboard = () => {
       )}
       
       {/* Header */}
-      <div className="flex-shrink-0 bg-[#0F172A]/80 backdrop-blur-xl px-4 md:px-6 py-4">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-6">
+      <div className="flex-shrink-0 bg-[#0F172A]/80 backdrop-blur-xl px-4 md:px-6 py-3 md:py-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 lg:gap-4">
           {/* Title */}
-          <div className="flex items-center min-w-0 flex-shrink-0">
-            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight truncate">Monitoring Aset Jalan Tol Becakayu</h1>
+          <div className="flex items-center">
+            <h1 className="text-lg md:text-xl lg:text-2xl font-bold text-white tracking-tight">Monitoring Aset Jalan Tol Becakayu</h1>
           </div>
 
           {/* Filter Section */}
-          <div className="flex flex-wrap items-center gap-2 md:gap-3 justify-start lg:justify-end w-full lg:w-auto min-w-0">
+          <div className="flex flex-wrap items-center gap-2 lg:gap-3 justify-end">
             {/* Date Filters */}
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2">
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="px-2 md:px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-[10px] md:text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50 min-w-[80px] md:min-w-[100px] whitespace-nowrap"
+                className="px-2 md:px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-[10px] md:text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50 min-w-[80px] md:min-w-[100px]"
               >
-                <option value="">Bulan</option>
+                <option value="">Semua Bulan</option>
                 <option value="1">Jan</option>
                 <option value="2">Feb</option>
                 <option value="3">Mar</option>
@@ -610,9 +654,9 @@ const Dashboard = () => {
               <select
                 value={selectedWeek}
                 onChange={(e) => setSelectedWeek(e.target.value)}
-                className="px-2 md:px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-[10px] md:text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50 min-w-[70px] md:min-w-[90px] whitespace-nowrap"
+                className="px-2 md:px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-[10px] md:text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50 min-w-[70px] md:min-w-[90px]"
               >
-                <option value="">Minggu</option>
+                <option value="">Semua Minggu</option>
                 <option value="1">M1</option>
                 <option value="2">M2</option>
                 <option value="3">M3</option>
@@ -621,9 +665,9 @@ const Dashboard = () => {
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                className="px-2 md:px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-[10px] md:text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50 min-w-[80px] md:min-w-[100px] whitespace-nowrap"
+                className="px-2 md:px-3 py-1.5 bg-[#111827] border border-white/6 rounded-xl text-white text-[10px] md:text-xs focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]/50 min-w-[80px] md:min-w-[100px]"
               >
-                <option value="">Tahun</option>
+                <option value="">Semua Tahun</option>
                 {[2024, 2025, 2026, 2027].map(year => (
                   <option key={year} value={year}>{year}</option>
                 ))}
@@ -631,70 +675,69 @@ const Dashboard = () => {
             </div>
 
             {/* Separator */}
-            <div className="hidden md:block w-px h-6 bg-white/10 flex-shrink-0"></div>
+            <div className="hidden lg:block w-px h-6 bg-white/10"></div>
 
             {/* Asset Type Filter */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="flex items-center gap-1 md:gap-2">
-                <button
-                  onClick={handleSelectAllTypes}
-                  className="px-2 py-1 text-[10px] bg-[#3B82F6]/20 hover:bg-[#3B82F6]/30 text-[#3B82F6] rounded transition-colors whitespace-nowrap"
-                >
-                  Semua
-                </button>
-                <button
-                  onClick={handleResetFilter}
-                  className="px-2 py-1 text-[10px] bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors whitespace-nowrap"
-                >
-                  Reset
-                </button>
-              </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {['CCTV', 'SFO', 'LAMPU PJU', 'PANEL', 'KWH'].map(type => {
-                  const isSelected = selectedAssetTypes.includes(type);
-                  const color = getCategoryColor(type);
-                  const typeAssets = assets.filter(asset => normalizeAssetType(asset.category_name) === type);
-                  if (typeAssets.length === 0) return null;
-                  return (
-                    <button
-                      key={type}
-                      onClick={() => handleAssetTypeToggle(type)}
-                      className={`px-2 py-1 text-[10px] rounded transition-colors flex items-center gap-1 flex-shrink-0 ${
-                        isSelected
-                          ? 'text-white'
-                          : 'text-gray-400'
-                      }`}
-                      style={{
-                        backgroundColor: isSelected ? `${color}40` : 'rgba(17, 24, 39, 0.8)',
-                        border: isSelected ? `1px solid ${color}` : '1px solid rgba(255,255,255,0.1)'
-                      }}
-                    >
-                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                      <span className="hidden sm:inline">{type}</span>
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] md:text-xs text-gray-400 hidden xl:inline">Jenis Aset:</span>
+              <button
+                onClick={handleSelectAllTypes}
+                className="px-2 py-1 text-[10px] md:text-xs bg-[#3B82F6]/20 hover:bg-[#3B82F6]/30 text-[#3B82F6] rounded transition-colors whitespace-nowrap"
+              >
+                Pilih Semua
+              </button>
+              <button
+                onClick={handleResetFilter}
+                className="px-2 py-1 text-[10px] md:text-xs bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors whitespace-nowrap"
+              >
+                Reset
+              </button>
+            </div>
+
+            {/* Asset Type Buttons */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {['CCTV', 'SFO', 'LAMPU PJU', 'PANEL', 'KWH'].map(type => {
+                const isSelected = selectedAssetTypes.includes(type);
+                const color = getCategoryColor(type);
+                const typeAssets = assets.filter(asset => normalizeAssetType(asset.category_name) === type);
+                if (typeAssets.length === 0) return null;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => handleAssetTypeToggle(type)}
+                    className={`px-1.5 md:px-2 py-1 text-[9px] md:text-[10px] rounded transition-colors flex items-center gap-1 whitespace-nowrap ${
+                      isSelected
+                        ? 'text-white'
+                        : 'text-gray-400'
+                    }`}
+                    style={{
+                      backgroundColor: isSelected ? `${color}40` : 'rgba(17, 24, 39, 0.8)',
+                      border: isSelected ? `1px solid ${color}` : '1px solid rgba(255,255,255,0.1)'
+                    }}
+                  >
+                    <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full" style={{ backgroundColor: color }} />
+                    {type}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Refresh Button */}
             <button
               onClick={() => { fetchAssets(); fetchStats(); }}
-              className="px-3 md:px-4 py-1.5 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-xl text-[10px] md:text-xs transition-all duration-200 shadow-lg shadow-[#3B82F6]/20 flex-shrink-0 whitespace-nowrap"
+              className="px-3 md:px-4 py-1.5 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-xl text-[10px] md:text-xs transition-all duration-200 shadow-lg shadow-[#3B82F6]/20 whitespace-nowrap"
             >
               Refresh
             </button>
 
-            {/* Profile & Notification */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <NotificationCenter />
-              <ProfileDropdown
-                onProfileClick={() => setProfileModalOpen(true)}
-                onSettingsClick={handleSettingsClick}
-                onPasswordClick={handlePasswordClick}
-                onLogout={handleLogout}
-              />
-            </div>
+            {/* Icons */}
+            <NotificationCenter />
+            <ProfileDropdown
+              onProfileClick={() => setProfileModalOpen(true)}
+              onSettingsClick={handleSettingsClick}
+              onPasswordClick={handlePasswordClick}
+              onLogout={handleLogout}
+            />
           </div>
         </div>
       </div>
