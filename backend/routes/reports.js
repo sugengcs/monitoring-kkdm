@@ -79,8 +79,15 @@ router.post('/', auth, upload.single('photo'), async (req, res) => {
       } else if (damage_level === 'sedang' || damage_level === 'berat') {
         conditionStatus = 'rusak_berat';
       }
-      
+
+      console.log('[Report Creation] Updating asset condition:', {
+        asset_id,
+        damage_level,
+        new_condition: conditionStatus
+      });
+
       db.prepare('UPDATE assets SET condition_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conditionStatus, asset_id);
+      console.log('[Report Creation] Asset condition updated successfully');
     }
 
     // Create notification for admin
@@ -192,8 +199,16 @@ router.put('/:id/status', auth, teknisiOnly, async (req, res) => {
           }
         }
       }
-      
+
+      console.log('[Status Update] Updating asset condition:', {
+        asset_id: assetId,
+        previous_status: previousStatus,
+        new_status: status,
+        new_condition: conditionStatus
+      });
+
       db.prepare('UPDATE assets SET condition_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(conditionStatus, assetId);
+      console.log('[Status Update] Asset condition updated successfully');
     }
 
     // Also update technician fields if provided
@@ -422,8 +437,14 @@ router.put('/read-all', auth, authorize(['admin']), async (req, res) => {
 // Get repair report summary
 router.get('/summary', auth, async (req, res) => {
   try {
+    const timestamp = new Date().toISOString();
     const { start_date, end_date, page = 1, limit = 10 } = req.query;
     const offset = (page - 1) * limit;
+
+    console.log('=== Reports Summary Calculation ===');
+    console.log('Timestamp:', timestamp);
+    console.log('User:', req.user.id, req.user.full_name, req.user.role);
+    console.log('Filters:', { start_date, end_date, page, limit });
 
     let query = `
       SELECT 
@@ -431,7 +452,7 @@ router.get('/summary', auth, async (req, res) => {
         COUNT(*) as total,
         SUM(CASE WHEN status IN ('diproses', 'dalam_perbaikan') THEN 1 ELSE 0 END) as perbaikan,
         SUM(CASE WHEN status = 'selesai' THEN 1 ELSE 0 END) as selesai,
-        SUM(CASE WHEN status = 'pending' OR status = 'ditolak' THEN 1 ELSE 0 END) as sisa
+        SUM(CASE WHEN status != 'selesai' THEN 1 ELSE 0 END) as sisa
       FROM damage_reports
       WHERE 1=1
     `;
@@ -451,14 +472,15 @@ router.get('/summary', auth, async (req, res) => {
     params.push(parseInt(limit), offset);
 
     const data = db.prepare(query).all(...params);
+    console.log('✓ Daily Summary Data:', JSON.stringify(data, null, 2));
 
     // Get totals
     let totalQuery = `
-      SELECT 
+      SELECT
         COUNT(*) as total,
         SUM(CASE WHEN status IN ('diproses', 'dalam_perbaikan') THEN 1 ELSE 0 END) as total_perbaikan,
         SUM(CASE WHEN status = 'selesai' THEN 1 ELSE 0 END) as total_selesai,
-        SUM(CASE WHEN status = 'pending' OR status = 'ditolak' THEN 1 ELSE 0 END) as total_sisa
+        SUM(CASE WHEN status != 'selesai' THEN 1 ELSE 0 END) as total_sisa
       FROM damage_reports
       WHERE 1=1
     `;
@@ -475,6 +497,21 @@ router.get('/summary', auth, async (req, res) => {
     }
 
     const totals = db.prepare(totalQuery).get(...totalParams);
+    console.log('✓ Totals:', JSON.stringify(totals, null, 2));
+
+    // Verify totals calculation
+    const calculatedTotal = (totals.total_perbaikan || 0) + (totals.total_selesai || 0);
+    const expectedSisa = totals.total - (totals.total_selesai || 0);
+    console.log('✓ Total Verification:', {
+      actualTotal: totals.total,
+      calculatedTotal: calculatedTotal + (totals.total_sisa || 0),
+      match: totals.total === (calculatedTotal + (totals.total_sisa || 0)) ? '✓ MATCH' : '✗ MISMATCH'
+    });
+    console.log('✓ Sisa Verification:', {
+      actualSisa: totals.total_sisa,
+      expectedSisa: expectedSisa,
+      match: totals.total_sisa === expectedSisa ? '✓ MATCH' : '✗ MISMATCH'
+    });
 
     // Get count for pagination
     let countQuery = `
@@ -495,6 +532,15 @@ router.get('/summary', auth, async (req, res) => {
     }
 
     const { count } = db.prepare(countQuery).get(...countParams);
+    console.log('✓ Pagination Count:', count, 'distinct dates');
+
+    console.log('=== Reports Summary Calculation Complete ===');
+    console.log('Final Totals:', {
+      total: totals.total,
+      perbaikan: totals.total_perbaikan,
+      selesai: totals.total_selesai,
+      sisa: totals.total_sisa
+    });
 
     res.json({
       success: true,
