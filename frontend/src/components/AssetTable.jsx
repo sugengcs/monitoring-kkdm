@@ -138,16 +138,16 @@ const AssetTable = ({ assets, loading }) => {
       </div>
 
       {/* Table */}
-      <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-700/50 rounded-2xl overflow-hidden">
+      <div className="bg-[#0F172A]/50 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-800/50 border-b border-gray-700/50">
+              <tr className="bg-[#1E293B]/50 border-b border-white/5">
                 {columns.map((column) => (
                   <th
                     key={column.key}
                     onClick={() => handleSort(column.key)}
-                    className="px-6 py-4 text-left text-sm font-medium text-gray-300 cursor-pointer hover:text-white hover:bg-gray-700/50 transition-colors"
+                    className="px-5 py-3.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white hover:bg-white/5 transition-all duration-200"
                   >
                     <div className="flex items-center gap-2">
                       {column.label}
@@ -166,24 +166,25 @@ const AssetTable = ({ assets, loading }) => {
                 </tr>
               ) : (
                 currentAssets.map((asset, index) => (
-                  <tr key={index} className="border-b border-gray-700/50 hover:bg-gray-800/30 transition-colors">
-                    <td className="px-6 py-4 text-sm text-gray-300">{asset.no}</td>
-                    <td className="px-6 py-4 text-sm text-white font-medium">{asset.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-300">{asset.category}</td>
-                    <td className="px-6 py-4 text-sm text-gray-300">{asset.location}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        asset.status === 'Baik' ? 'bg-green-500/20 text-green-400' :
-                        asset.status === 'Rusak' ? 'bg-red-500/20 text-red-400' :
-                        asset.status === 'Perbaikan' ? 'bg-blue-500/20 text-blue-400' :
-                        'bg-gray-500/20 text-gray-400'
+                  <tr key={index} className="border-b border-white/5 hover:bg-white/5 transition-all duration-200 group">
+                    <td className="px-5 py-3.5 text-sm text-gray-300">{asset.no}</td>
+                    <td className="px-5 py-3.5 text-sm text-white font-medium">{asset.name}</td>
+                    <td className="px-5 py-3.5 text-sm text-gray-300">{asset.category}</td>
+                    <td className="px-5 py-3.5 text-sm text-gray-300">{asset.location}</td>
+                    <td className="px-5 py-3.5">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border shadow-sm ${
+                        asset.status === 'Baik' ? 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20 shadow-[#22C55E]/10' :
+                        asset.status === 'Rusak' ? 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20 shadow-[#EF4444]/10' :
+                        asset.status === 'Perbaikan' || asset.status === 'Dalam Perbaikan' ? 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20 shadow-[#F59E0B]/10' :
+                        asset.status === 'Selesai' ? 'bg-[#8B5CF6]/10 text-[#8B5CF6] border-[#8B5CF6]/20 shadow-[#8B5CF6]/10' :
+                        'bg-gray-500/10 text-gray-400 border-gray-500/20'
                       }`}>
                         {asset.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-300">{asset.date}</td>
-                    <td className="px-6 py-4 text-sm text-gray-300">{asset.technician}</td>
-                    <td className="px-6 py-4 text-sm text-gray-300">{asset.notes}</td>
+                    <td className="px-5 py-3.5 text-sm text-gray-300">{asset.date}</td>
+                    <td className="px-5 py-3.5 text-sm text-gray-300">{asset.technician}</td>
+                    <td className="px-5 py-3.5 text-sm text-gray-300">{asset.notes}</td>
                   </tr>
                 ))
               )}

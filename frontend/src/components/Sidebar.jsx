@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -12,7 +13,9 @@ import {
   Settings,
   LogOut,
   FileText,
-  Activity
+  Activity,
+  Menu,
+  X
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../utils/cn';
@@ -33,7 +36,7 @@ const menuItems = [
   { path: '/logout', icon: LogOut, label: 'Logout', roles: ['admin', 'teknisi', 'karyawan', 'manager'], isLogout: true },
 ];
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen, onToggle }) => {
   const location = useLocation();
   const { user, logout } = useAuth();
 
@@ -42,54 +45,81 @@ const Sidebar = () => {
   );
 
   return (
-    <aside className="w-64 bg-[#0F172A]/80 backdrop-blur-xl border-r border-white/6 flex flex-col">
-      <div className="p-6 border-b border-white/6 text-center">
-        <img
-          src="/logo-kikdm.png"
-          alt="PT KKDM"
-          className="h-20 w-auto object-contain mx-auto"
-          onError={(e) => { e.target.style.display = 'none'; }}
-        />
-      </div>
+    <>
+      {/* Mobile Hamburger Button */}
+      <button
+        onClick={onToggle}
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-[#0F172A] border border-white/10 rounded-lg text-white"
+      >
+        {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+      </button>
 
-      <nav className="flex-1 p-4 space-y-1">
-        {filteredMenuItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.path;
-          
-          if (item.isLogout) {
+      {/* Mobile Overlay */}
+      {isOpen && (
+        <div
+          onClick={onToggle}
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={cn(
+        "fixed lg:static inset-y-0 left-0 z-50 bg-[#0F172A]/95 backdrop-blur-xl border-r border-white/10 flex flex-col transition-transform duration-300",
+        isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+        "w-60"
+      )}>
+        <div className="p-5 border-b border-white/5">
+          <img
+            src="/logo-kikdm.png"
+            alt="PT KKDM"
+            className="h-16 w-auto object-contain mx-auto"
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+        </div>
+
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          {filteredMenuItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path;
+            
+            if (item.isLogout) {
+              return (
+                <button
+                  key={item.path}
+                  onClick={logout}
+                  className="flex items-center gap-3 px-4 py-2.5 w-full rounded-lg text-[#94A3B8] hover:bg-red-500/10 hover:text-red-400 transition-all duration-200 group"
+                >
+                  <Icon className="w-4.5 h-4.5 group-hover:scale-110 transition-transform duration-200" />
+                  <span className="font-medium text-sm">{item.label}</span>
+                </button>
+              );
+            }
+            
             return (
-              <button
+              <NavLink
                 key={item.path}
-                onClick={logout}
-                className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-[#94A3B8] hover:bg-white/5 hover:text-white transition-all duration-200"
+                to={item.path}
+                onClick={() => onToggle(false)}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 group',
+                    isActive
+                      ? 'bg-gradient-to-r from-[#3B82F6]/20 to-[#3B82F6]/5 text-[#3B82F6] border border-[#3B82F6]/20 shadow-lg shadow-[#3B82F6]/10'
+                      : 'text-[#94A3B8] hover:bg-white/5 hover:text-white'
+                  )
+                }
               >
-                <Icon className="w-5 h-5" />
-                <span className="font-medium">{item.label}</span>
-              </button>
+                <Icon className="w-4.5 h-4.5 group-hover:scale-110 transition-transform duration-200" />
+                <span className="font-medium text-sm">{item.label}</span>
+                {isActive && (
+                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#3B82F6] shadow-lg shadow-[#3B82F6]/50" />
+                )}
+              </NavLink>
             );
-          }
-          
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
-                  isActive
-                    ? 'bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20'
-                    : 'text-[#94A3B8] hover:bg-white/5 hover:text-white'
-                )
-              }
-            >
-              <Icon className="w-5 h-5" />
-              <span className="font-medium">{item.label}</span>
-            </NavLink>
-          );
-        })}
-      </nav>
-    </aside>
+          })}
+        </nav>
+      </aside>
+    </>
   );
 };
 

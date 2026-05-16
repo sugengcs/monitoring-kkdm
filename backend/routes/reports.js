@@ -187,7 +187,7 @@ router.put('/:id/status', auth, teknisiOnly, async (req, res) => {
       if (status === 'diproses' || status === 'dalam_perbaikan') {
         conditionStatus = 'sedang_diperbaiki';
       } else if (status === 'selesai') {
-        conditionStatus = 'selesai_diperbaiki';
+        conditionStatus = 'baik'; // Asset returns to good condition when repair is completed
       } else if (status === 'ditolak' || status === 'pending') {
         // Keep current condition or revert based on damage level
         const report = db.prepare('SELECT damage_level FROM damage_reports WHERE id = ?').get(id);
@@ -423,13 +423,15 @@ router.put('/:id/read', auth, async (req, res) => {
 });
 
 // Mark all reports as read
-router.put('/read-all', auth, authorize(['admin']), async (req, res) => {
+router.put('/read-all', auth, async (req, res) => {
   try {
-    db.prepare('UPDATE damage_reports SET is_read = 1 WHERE is_read = 0').run();
+    console.log('[Read-All] Marking all reports as read for user:', req.user.id, req.user.full_name, req.user.role);
+    const result = db.prepare('UPDATE damage_reports SET is_read = 1 WHERE is_read = 0').run();
+    console.log('[Read-All] Updated', result.changes, 'reports as read');
 
     res.json({ success: true, message: 'All reports marked as read' });
   } catch (error) {
-    console.error(error);
+    console.error('[Read-All] Error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

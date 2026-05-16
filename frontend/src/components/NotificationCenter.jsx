@@ -85,11 +85,15 @@ const NotificationCenter = () => {
 
   const markAllAsRead = async () => {
     try {
-      await api.put('/reports/read-all');
+      console.log('[NotificationCenter] Marking all as read...');
+      const response = await api.put('/reports/read-all');
+      console.log('[NotificationCenter] Mark all as read response:', response.data);
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
+      toast.success('Semua notifikasi ditandai sebagai dibaca');
     } catch (error) {
-      console.error('Error marking all as read:', error);
+      console.error('[NotificationCenter] Error marking all as read:', error);
+      toast.error('Gagal menandai semua sebagai dibaca');
     }
   };
 

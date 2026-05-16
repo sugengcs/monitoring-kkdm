@@ -1,22 +1,13 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState } from 'react';
 import api from '../utils/api';
 
-
-const AuthContext = createContext({
-  user: null,
-  setUser: () => {},
-  loading: false,
-  token: null,
-});
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
 
   const [user, setUser] = useState(() => {
-
     const savedUser = localStorage.getItem('user');
-
     return savedUser ? JSON.parse(savedUser) : null;
-
   });
 
   const [loading, setLoading] = useState(false);
@@ -25,63 +16,62 @@ export const AuthProvider = ({ children }) => {
     localStorage.getItem('token')
   );
 
-  return (
-    <AuthContext.Provider value={{ user, setUser, loading, token }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const login = async (username, password) => {
+    setLoading(true);
+    try {
+      const response = await api.post('/auth/login', { username, password });
+      const { success, token: newToken, user: userData } = response.data;
 
-};
+      if (success && newToken && userData) {
+        localStorage.setItem('token', newToken);
+        localStorage.setItem('user', JSON.stringify(userData));
 
-const login = async (username, password) => {
+        setToken(newToken);
+        setUser(userData);
 
-  // LOGIN SEMENTARA UNTUK VERCEL
-  if (username === 'admin' && password === 'admin123') {
+        return { success: true };
+      }
 
-    const userData = {
-      username: 'admin',
-      role: 'admin'
-    };
-
-    const newToken = 'dummy-token';
-
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user', JSON.stringify(userData));
-
-    setToken(newToken);
-    setUser(userData);
-
-    return { success: true };
-  }
-
-  return {
-    success: false,
-    message: 'Login failed'
+      return {
+        success: false,
+        message: 'Login failed: Invalid response'
+      };
+    } catch (error) {
+      console.error('[AuthContext] Login error:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Login failed';
+      return {
+        success: false,
+        message: errorMessage
+      };
+    } finally {
+      setLoading(false);
+    }
   };
-};
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
+
     setToken(null);
     setUser(null);
   };
 
-  const value = {
-    user,
-    token,
-    loading,
-    login,
-    logout,
-    isAuthenticated: !!user
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        login,
+        logout,
+        isAuthenticated: !!user
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  return useContext(AuthContext);
 };

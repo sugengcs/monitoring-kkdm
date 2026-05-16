@@ -52,6 +52,10 @@ router.get('/stats', auth, async (req, res) => {
 
     console.log('✓ Assets by Condition:', JSON.stringify(assetsByCondition, null, 2));
 
+    // Log all unique condition statuses found
+    const allConditions = assetsByCondition.map(c => c.condition_status);
+    console.log('✓ All condition statuses found:', allConditions);
+
     // Calculate individual counts
     const countBaik = (assetsByCondition.find(c => c.condition_status === 'baik')?.count || 0);
     const countRusakRingan = (assetsByCondition.find(c => c.condition_status === 'rusak_ringan')?.count || 0);
@@ -59,12 +63,34 @@ router.get('/stats', auth, async (req, res) => {
     const countSedangPerbaikan = (assetsByCondition.find(c => c.condition_status === 'sedang_diperbaiki')?.count || 0);
     const countSelesaiDiperbaiki = (assetsByCondition.find(c => c.condition_status === 'selesai_diperbaiki')?.count || 0);
 
+    // Check for assets with other conditions not in the main categories
+    const otherConditions = assetsByCondition.filter(c =>
+      !['baik', 'rusak_ringan', 'rusak_berat', 'sedang_diperbaiki', 'selesai_diperbaiki'].includes(c.condition_status)
+    );
+    if (otherConditions.length > 0) {
+      console.warn('⚠️ Found assets with other conditions:', JSON.stringify(otherConditions, null, 2));
+    }
+
     const totalRusak = countRusakRingan + countRusakBerat;
     const totalBaik = countBaik + countSelesaiDiperbaiki;
 
     console.log('✓ Baik:', totalBaik, '(baik:', countBaik, ', selesai_diperbaiki:', countSelesaiDiperbaiki, ')');
     console.log('✓ Rusak:', totalRusak, '(ringan:', countRusakRingan, ', berat:', countRusakBerat, ')');
     console.log('✓ Sedang Perbaikan:', countSedangPerbaikan);
+
+    // Selesai Perbaikan (Histori) - count of reports with status 'selesai'
+    const countSelesaiHistory = (reportsByStatus.find(s => s.status === 'selesai')?.count || 0);
+    console.log('✓ Selesai Perbaikan (Histori):', countSelesaiHistory);
+
+    // Verify total assets = baik + rusak + sedang_perbaikan
+    const calculatedTotal = totalBaik + totalRusak + countSedangPerbaikan;
+    console.log('✓ Calculated Total (baik + rusak + sedang_perbaikan):', calculatedTotal);
+    console.log('✓ Actual Total Assets:', totalAssets.count);
+    console.log('✓ Match:', calculatedTotal === totalAssets.count ? '✓ MATCH' : '✗ MISMATCH');
+    if (calculatedTotal !== totalAssets.count) {
+      console.error('⚠️ DATA MISMATCH: Total assets does not equal sum of conditions!');
+      console.error('   Expected:', totalAssets.count, 'Got:', calculatedTotal, 'Difference:', totalAssets.count - calculatedTotal);
+    }
 
     // Total damage reports
     const totalReports = db.prepare('SELECT COUNT(*) as count FROM damage_reports').get();
@@ -78,10 +104,13 @@ router.get('/stats', auth, async (req, res) => {
     const maintenanceStats = db.prepare('SELECT status, COUNT(*) as count FROM maintenance_progress GROUP BY status').all();
     console.log('✓ Maintenance Stats:', JSON.stringify(maintenanceStats, null, 2));
 
-    // Calculate: Sisa Belum Selesai = total laporan - laporan selesai
+    // Calculate: Sisa Belum Selesai = only pending and diproses (match frontend logic)
     const countSelesai = (reportsByStatus.find(s => s.status === 'selesai')?.count || 0);
-    const sisaBelumSelesai = totalReports.count - countSelesai;
-    console.log('✓ Sisa Belum Selesai:', sisaBelumSelesai, '(total:', totalReports.count, '- selesai:', countSelesai, ')');
+    const countPending = (reportsByStatus.find(s => s.status === 'pending')?.count || 0);
+    const countDiproses = (reportsByStatus.find(s => s.status === 'diproses')?.count || 0);
+    const sisaBelumSelesai = countPending + countDiproses;
+    console.log('✓ Sisa Belum Selesai:', sisaBelumSelesai, '(pending:', countPending, '+ diproses:', countDiproses, ')');
+    console.log('✓ Total Reports:', totalReports.count, '(selesai:', countSelesai, ', other:', totalReports.count - countSelesai - sisaBelumSelesai, ')');
 
     // Assets by category
     const assetsByCategory = db.prepare('SELECT ac.name as category, COUNT(*) as count FROM assets a LEFT JOIN asset_categories ac ON a.category_id = ac.id GROUP BY a.category_id').all();
@@ -114,10 +143,11 @@ router.get('/stats', auth, async (req, res) => {
       sedangPerbaikan: countSedangPerbaikan,
       totalReports: totalReports.count,
       selesai: countSelesai,
-      sisaBelumSelesai
+      sisaBelumSelesai,
+      selesai_perbaikan_history: countSelesaiHistory
     });
 
-    res.json({
+    const responseData = {
       success: true,
       data: {
         totalAssets: totalAssets.count,
@@ -133,10 +163,14 @@ router.get('/stats', auth, async (req, res) => {
           rusak: totalRusak,
           sedangPerbaikan: countSedangPerbaikan,
           selesai: countSelesai,
+          selesai_perbaikan_history: countSelesaiHistory,
           sisaBelumSelesai
         }
       }
-    });
+    };
+    
+    console.log('Response Data:', JSON.stringify(responseData, null, 2));
+    res.json(responseData);
   } catch (error) {
     console.error('Dashboard stats error:', error);
     console.error('Stack:', error.stack);

@@ -9,6 +9,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  base: '/',
   server: {
     port: 5173,
     proxy: {
@@ -17,5 +18,19 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          maps: ['leaflet', 'react-leaflet'],
+          charts: ['recharts'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
   },
 })

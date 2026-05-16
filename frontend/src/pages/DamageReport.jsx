@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import api from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 const DamageReport = () => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     fetchReports();
@@ -17,6 +23,21 @@ const DamageReport = () => {
       console.error('Error fetching reports:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (report) => {
+    if (!window.confirm(`Hapus laporan ${report.report_number}? Data yang dihapus tidak dapat dikembalikan.`)) return;
+    try {
+      setDeletingId(report.id);
+      await api.delete(`/reports/${report.id}`);
+      toast.success('Laporan berhasil dihapus');
+      setReports(prev => prev.filter(r => r.id !== report.id));
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      toast.error(error.response?.data?.message || 'Gagal menghapus laporan');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -38,18 +59,19 @@ const DamageReport = () => {
                 <th className="px-6 py-4">Tingkat Kerusakan</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4">Tanggal</th>
+                {isAdmin && <th className="px-6 py-4 text-center">Aksi</th>}
               </tr>
             </thead>
             <tbody className="text-gray-300">
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center">
+                  <td colSpan={isAdmin ? 6 : 5} className="px-6 py-8 text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
                   </td>
                 </tr>
               ) : reports.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-400">
+                  <td colSpan={isAdmin ? 6 : 5} className="px-6 py-8 text-center text-gray-400">
                     Belum ada laporan kerusakan
                   </td>
                 </tr>
@@ -77,6 +99,22 @@ const DamageReport = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4">{new Date(report.reported_at).toLocaleDateString('id-ID')}</td>
+                    {isAdmin && (
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => handleDelete(report)}
+                          disabled={deletingId === report.id}
+                          className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Hapus laporan"
+                        >
+                          {deletingId === report.id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-400"></div>
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}

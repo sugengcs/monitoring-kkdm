@@ -94,9 +94,6 @@ const Login = () => {
                 <input type="checkbox" className="mr-2 rounded" />
                 Remember me
               </label>
-              <a href="#" className="text-blue-400 hover:text-blue-300">
-                Forgot password?
-              </a>
             </div>
 
             <button
@@ -114,11 +111,6 @@ const Login = () => {
               )}
             </button>
           </form>
-
-          <div className="mt-8 text-center text-sm text-gray-400">
-            <p>Demo credentials:</p>
-            <p className="mt-1">Username: admin | Password: admin123</p>
-          </div>
         </div>
       </div>
     </div>

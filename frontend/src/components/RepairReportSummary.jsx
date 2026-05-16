@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Calendar, Wrench, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Bell } from 'lucide-react';
 import api from '../utils/api';
 
-const RepairReportSummary = ({ onSedangPerbaikanClick, onSelesaiClick, onBelumSelesaiClick }) => {
+const RepairReportSummary = ({ onSedangPerbaikanClick, onSelesaiClick, onBelumSelesaiClick, reports }) => {
   const [data, setData] = useState([]);
   const [totals, setTotals] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -10,6 +10,83 @@ const RepairReportSummary = ({ onSedangPerbaikanClick, onSelesaiClick, onBelumSe
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState(null);
+
+  // Calculate totals from reports prop if provided (for consistency with dashboard)
+  const calculateTotalsFromReports = (reportsData, dateFilterStart, dateFilterEnd) => {
+    if (!reportsData || !Array.isArray(reportsData)) return null;
+
+    // Apply date filter if provided
+    let filteredReports = reportsData;
+    if (dateFilterStart || dateFilterEnd) {
+      filteredReports = reportsData.filter(report => {
+        if (!report.reported_at) return false;
+        const reportDate = new Date(report.reported_at).toISOString().split('T')[0];
+        if (dateFilterStart && reportDate < dateFilterStart) return false;
+        if (dateFilterEnd && reportDate > dateFilterEnd) return false;
+        return true;
+      });
+    }
+
+    const total = filteredReports.length;
+    const totalSelesai = filteredReports.filter(r => r.status === 'selesai').length;
+    // Match Dashboard filter: only pending and diproses count as "belum selesai"
+    const totalSisa = filteredReports.filter(r => r.status === 'pending' || r.status === 'diproses').length;
+    return {
+      total,
+      total_selesai: totalSelesai,
+      total_sisa: totalSisa
+    };
+  };
+
+  // Use reports prop if available, otherwise fetch from API
+  useEffect(() => {
+    if (reports && Array.isArray(reports)) {
+      // Apply date filter to reports
+      let filteredReports = reports;
+      if (startDate || endDate) {
+        filteredReports = reports.filter(report => {
+          if (!report.reported_at) return false;
+          const reportDate = new Date(report.reported_at).toISOString().split('T')[0];
+          if (startDate && reportDate < startDate) return false;
+          if (endDate && reportDate > endDate) return false;
+          return true;
+        });
+      }
+
+      // Group by date for table display
+      const groupedData = {};
+      filteredReports.forEach(report => {
+        if (!report.reported_at) return;
+        const date = new Date(report.reported_at).toISOString().split('T')[0];
+        if (!groupedData[date]) {
+          groupedData[date] = {
+            tanggal: date,
+            total: 0,
+            perbaikan: 0,
+            selesai: 0,
+            sisa: 0
+          };
+        }
+        groupedData[date].total++;
+        if (report.status === 'selesai') {
+          groupedData[date].selesai++;
+        } else if (report.status === 'pending' || report.status === 'diproses') {
+          groupedData[date].sisa++;
+        }
+        if (report.status === 'diproses' || report.status === 'dalam_perbaikan') {
+          groupedData[date].perbaikan++;
+        }
+      });
+
+      const tableData = Object.values(groupedData).sort((a, b) => b.tanggal.localeCompare(a.tanggal));
+      setData(tableData);
+
+      const calculatedTotals = calculateTotalsFromReports(reports, startDate, endDate);
+      setTotals(calculatedTotals);
+      setLoading(false);
+      console.log('[RepairReportSummary] Using reports prop with filter:', { startDate, endDate, totals: calculatedTotals, tableDataCount: tableData.length });
+    }
+  }, [reports, startDate, endDate]);
 
   const fetchData = async () => {
     try {
@@ -22,19 +99,24 @@ const RepairReportSummary = ({ onSedangPerbaikanClick, onSelesaiClick, onBelumSe
           limit: 10
         }
       });
+      console.log('[RepairReportSummary] API Response:', response.data);
+      console.log('[RepairReportSummary] Totals:', response.data.totals);
       setData(response.data.data);
       setTotals(response.data.totals);
       setPagination(response.data.pagination);
     } catch (error) {
-      console.error('Error fetching repair report summary:', error);
+      console.error('[RepairReportSummary] Error fetching repair report summary:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  // Only fetch from API if reports prop is not provided
   useEffect(() => {
-    fetchData();
-  }, [startDate, endDate, currentPage]);
+    if (!reports) {
+      fetchData();
+    }
+  }, [startDate, endDate, currentPage, reports]);
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -69,26 +151,6 @@ const RepairReportSummary = ({ onSedangPerbaikanClick, onSelesaiClick, onBelumSe
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-4">
-        <SummaryCard
-          title="Selesai"
-          value={totals?.total_selesai}
-          icon={CheckCircle}
-          color="text-[#22C55E]"
-          bgColor="bg-[#22C55E]"
-          onClick={onSelesaiClick}
-        />
-        <SummaryCard
-          title="Sisa Belum Selesai"
-          value={totals?.total_sisa}
-          icon={AlertCircle}
-          color="text-[#EF4444]"
-          bgColor="bg-[#EF4444]"
-          onClick={onBelumSelesaiClick}
-        />
-      </div>
-
       {/* Main Card */}
       <div className="glass-card p-4 flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between gap-4 mb-4">
