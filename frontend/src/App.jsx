@@ -14,6 +14,7 @@ import Settings from './pages/Settings';
 import Karyawan from './pages/Karyawan';
 import RepairTracking from './pages/RepairTracking';
 import ProgressLahan from './pages/ProgressLahan';
+import ProgressDashboard from './pages/ProgressDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/MainLayout';
 
@@ -28,23 +29,31 @@ function App() {
               path="/*"
               element={
                 <ProtectedRoute>
-                  <MainLayout>
-                    <Routes>
-                      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                      <Route path="/dashboard" element={<Dashboard />} />
-                      <Route path="/monitoring" element={<MonitoringMap />} />
-                      <Route path="/monitoring-shms" element={<MonitoringSHMS />} />
-                      <Route path="/assets" element={<AssetData />} />
-                      <Route path="/reports" element={<DamageReport />} />
-                      <Route path="/karyawan" element={<Karyawan />} />
-                      <Route path="/repair-tracking" element={<RepairTracking />} />
-                      <Route path="/progress-lahan" element={<ProgressLahan />} />
-                      <Route path="/cctv" element={<CCTVMonitoring />} />
-                      <Route path="/analytics" element={<Analytics />} />
-                      <Route path="/users" element={<UserManagement />} />
-                      <Route path="/settings" element={<Settings />} />
-                    </Routes>
-                  </MainLayout>
+                  <Routes>
+                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                    <Route
+                      path="/*"
+                      element={
+                        <MainLayout>
+                          <Routes>
+                            <Route path="/dashboard" element={<Dashboard />} />
+                            <Route path="/monitoring" element={<MonitoringMap />} />
+                            <Route path="/monitoring-shms" element={<MonitoringSHMS />} />
+                            <Route path="/assets" element={<AssetData />} />
+                            <Route path="/reports" element={<DamageReport />} />
+                            <Route path="/karyawan" element={<Karyawan />} />
+                            <Route path="/repair-tracking" element={<RepairTracking />} />
+                            <Route path="/progress-lahan" element={<ProgressLahan />} />
+                            <Route path="/cctv" element={<CCTVMonitoring />} />
+                            <Route path="/analytics" element={<Analytics />} />
+                            <Route path="/users" element={<UserManagement />} />
+                            <Route path="/settings" element={<Settings />} />
+                          </Routes>
+                        </MainLayout>
+                      }
+                    />
+                    <Route path="/progress-dashboard" element={<ProgressDashboard />} />
+                  </Routes>
                 </ProtectedRoute>
               }
             />

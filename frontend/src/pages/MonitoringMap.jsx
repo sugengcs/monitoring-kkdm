@@ -6,6 +6,14 @@ import { validateKMLFile } from '../utils/kmlParser';
 import { Edit2, Trash2, MapPin, Upload, X, Save, Layers, Eye, EyeOff, ChevronRight, ChevronDown, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getStatusConfig, requiresAnimation, getAnimationClass, isDamageStatus, isRepairStatus } from '../utils/markerStatusHelper';
+import {
+  createAssetIcon,
+  createAssetIconHighlight,
+  createModernPopup,
+  getConditionStyle,
+  getAssetShape,
+} from '../utils/assetMarkerUtils';
+import MapLegend from '../components/MapLegend';
 
 // Calculate polygon area in square meters using Shoelace formula
 const calculatePolygonArea = (coordinates) => {
@@ -919,8 +927,9 @@ const MonitoringMap = () => {
 
       {/* Map + Sidebar */}
       <div className="flex gap-4">
-        <div className="flex-1 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
+        <div className="flex-1 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden relative">
           <div ref={mapContainerRef} style={{ width: '100%', height: '600px', background: '#1a1a2e' }} />
+          <MapLegend assets={assets} />
         </div>
 
         {/* Category Layer Sidebar */}

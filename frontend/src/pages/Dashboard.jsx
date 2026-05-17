@@ -19,6 +19,17 @@ import ProfileModal from '../components/ProfileModal';
 import AssetDetailModal from '../components/AssetDetailModal';
 import NotificationCenter from '../components/NotificationCenter';
 import ReportDetailModal from '../components/ReportDetailModal';
+import MapLegend from '../components/MapLegend';
+import {
+  createAssetIcon,
+  createAssetIconHighlight,
+  createModernPopup,
+  getConditionStyle,
+  normalizeAssetType as resolveAssetType,
+  CONDITION_FILTERS,
+  ASSET_TYPE_SHAPES,
+  createLegendSVG,
+} from '../utils/assetMarkerUtils';
 import toast from 'react-hot-toast';
 
 const getCategoryColor = (categoryName) => {
@@ -129,8 +140,17 @@ const Dashboard = () => {
     'SFO',
     'LAMPU PJU',
     'PANEL',
-    'KWH'
+    'KWH',
+    'PERKERASAN',
+    'DRAINASE',
+    'GUARDRAIL',
+    'RAMBU'
   ]);
+
+  // Condition filter state (multi-select)
+  const [selectedConditions, setSelectedConditions] = useState(
+    CONDITION_FILTERS.map(f => f.key)
+  );
 
   // Helper function to normalize asset category name to standard type
   const normalizeAssetType = (categoryName) => {
@@ -141,6 +161,10 @@ const Dashboard = () => {
     if (upper.includes('LAMPU') || upper.includes('PJU')) return 'LAMPU PJU';
     if (upper.includes('PANEL')) return 'PANEL';
     if (upper.includes('KWH')) return 'KWH';
+    if (upper.includes('PERKERASAN')) return 'PERKERASAN';
+    if (upper.includes('DRAINASE')) return 'DRAINASE';
+    if (upper.includes('GUARDRAIL') || upper.includes('GUARD')) return 'GUARDRAIL';
+    if (upper.includes('RAMBU')) return 'RAMBU';
     return null;
   };
 
@@ -169,9 +193,18 @@ const Dashboard = () => {
     setSelectedAssetTypes(availableTypes);
   };
 
-  // Reset filter to all types
+  // Condition filter toggle
+  const handleConditionToggle = (key) => {
+    setSelectedConditions(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  // Reset filter to all types + all conditions
   const handleResetFilter = () => {
-    setSelectedAssetTypes(['CCTV', 'SFO', 'LAMPU PJU', 'PANEL', 'KWH']);
+    const availableTypes = getAvailableAssetTypes();
+    setSelectedAssetTypes(availableTypes.length > 0 ? availableTypes : ['CCTV', 'SFO', 'LAMPU PJU', 'PANEL', 'KWH']);
+    setSelectedConditions(CONDITION_FILTERS.map(f => f.key));
   };
 
   // Filter assets based on all selected filters (asset type, month, week, year)
@@ -189,15 +222,14 @@ const Dashboard = () => {
       const assetType = normalizeAssetType(asset.category_name);
       const matchType = assetType && selectedAssetTypes.includes(assetType);
 
-      if (!matchType) {
-        console.log('[Dashboard] Asset filtered by type:', {
-          assetName: asset.name,
-          categoryName: asset.category_name,
-          normalizedType: assetType,
-          selectedTypes: selectedAssetTypes
-        });
-        return false;
-      }
+      if (!matchType) return false;
+
+      // Filter by condition
+      const conditionMatch = selectedConditions.some(key => {
+        const filter = CONDITION_FILTERS.find(f => f.key === key);
+        return filter && filter.match(asset.condition_status);
+      });
+      if (!conditionMatch) return false;
 
       // Filter by month
       if (selectedMonth) {
@@ -250,7 +282,7 @@ const Dashboard = () => {
     });
 
     return filtered;
-  }, [assets, selectedAssetTypes, selectedMonth, selectedWeek, selectedYear]);
+  }, [assets, selectedAssetTypes, selectedConditions, selectedMonth, selectedWeek, selectedYear]);
 
   // Calculate statistics from filtered assets
   const filteredStats = useMemo(() => {
@@ -345,16 +377,17 @@ const Dashboard = () => {
       const lat = parseFloat(asset.location_lat);
       const lng = parseFloat(asset.location_lng);
       if (isNaN(lat) || isNaN(lng)) return;
-      const circle = L.circleMarker([lat, lng], {
-        radius: 8,
-        fillColor: getCategoryColor(asset.category_name),
-        fillOpacity: 0.9,
-        color: '#ffffff',
-        weight: 1.5,
-      }).addTo(map);
-      circle.bindTooltip(asset.category_name || asset.name, { direction: 'top', offset: [0, -8] });
-      circle.bindPopup(`<div style="text-align: center; padding: 8px; font-family: Inter, sans-serif;"><strong>${asset.category_name || asset.name}</strong></div>`);
-      markersRef.current.push(circle);
+
+      const icon = createAssetIcon(asset.category_name, asset.condition_status);
+      const marker = L.marker([lat, lng], { icon }).addTo(map);
+
+      marker.bindTooltip(asset.category_name || asset.name, {
+        direction: 'top',
+        offset: [0, -14],
+        className: 'kml-layer-tooltip',
+      });
+      marker.bindPopup(createModernPopup(asset), { maxWidth: 280, className: '' });
+      markersRef.current.push(marker);
     });
 
     const validPoints = filteredAssets
@@ -681,12 +714,6 @@ const Dashboard = () => {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] md:text-xs text-gray-400 hidden xl:inline">Jenis Aset:</span>
               <button
-                onClick={handleSelectAllTypes}
-                className="px-2 py-1 text-[10px] md:text-xs bg-[#3B82F6]/20 hover:bg-[#3B82F6]/30 text-[#3B82F6] rounded transition-colors whitespace-nowrap"
-              >
-                Pilih Semua
-              </button>
-              <button
                 onClick={handleResetFilter}
                 className="px-2 py-1 text-[10px] md:text-xs bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors whitespace-nowrap"
               >
@@ -694,29 +721,54 @@ const Dashboard = () => {
               </button>
             </div>
 
-            {/* Asset Type Buttons */}
+            {/* Asset Type Buttons (dynamic) */}
             <div className="flex items-center gap-1 flex-wrap">
-              {['CCTV', 'SFO', 'LAMPU PJU', 'PANEL', 'KWH'].map(type => {
+              {getAvailableAssetTypes().map(type => {
                 const isSelected = selectedAssetTypes.includes(type);
                 const color = getCategoryColor(type);
                 const typeAssets = assets.filter(asset => normalizeAssetType(asset.category_name) === type);
                 if (typeAssets.length === 0) return null;
+                const shapeKey = resolveAssetType(type);
+                const shape = shapeKey && ASSET_TYPE_SHAPES[shapeKey] ? ASSET_TYPE_SHAPES[shapeKey].shape : 'circle';
                 return (
                   <button
                     key={type}
                     onClick={() => handleAssetTypeToggle(type)}
                     className={`px-1.5 md:px-2 py-1 text-[9px] md:text-[10px] rounded transition-colors flex items-center gap-1 whitespace-nowrap ${
-                      isSelected
-                        ? 'text-white'
-                        : 'text-gray-400'
+                      isSelected ? 'text-white' : 'text-gray-400'
                     }`}
                     style={{
                       backgroundColor: isSelected ? `${color}40` : 'rgba(17, 24, 39, 0.8)',
                       border: isSelected ? `1px solid ${color}` : '1px solid rgba(255,255,255,0.1)'
                     }}
                   >
-                    <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full" style={{ backgroundColor: color }} />
+                    <span dangerouslySetInnerHTML={{ __html: createLegendSVG(shape, isSelected ? color : '#6b7280', 12) }} />
                     {type}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Condition Filter Buttons */}
+            <div className="hidden lg:block w-px h-6 bg-white/10"></div>
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[10px] md:text-xs text-gray-400 hidden xl:inline">Kondisi:</span>
+              {CONDITION_FILTERS.map(({ key, label, color }) => {
+                const isSelected = selectedConditions.includes(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleConditionToggle(key)}
+                    className={`px-1.5 md:px-2 py-1 text-[9px] md:text-[10px] rounded transition-colors flex items-center gap-1 whitespace-nowrap ${
+                      isSelected ? 'text-white' : 'text-gray-400'
+                    }`}
+                    style={{
+                      backgroundColor: isSelected ? `${color}25` : 'rgba(17, 24, 39, 0.8)',
+                      border: isSelected ? `1px solid ${color}` : '1px solid rgba(255,255,255,0.1)'
+                    }}
+                  >
+                    <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full" style={{ backgroundColor: color, boxShadow: isSelected ? `0 0 6px ${color}` : 'none' }} />
+                    {label}
                   </button>
                 );
               })}
@@ -796,6 +848,7 @@ const Dashboard = () => {
               className="w-full h-full min-h-[300px] md:min-h-[400px] lg:min-h-[500px]"
               style={{ zIndex: 0 }}
             />
+            <MapLegend assets={filteredAssets} />
           </div>
         </div>
 

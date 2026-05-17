@@ -246,6 +246,166 @@ polyline.marker-status-repair {
   z-index: 4 !important;
 }
 
+/* ═══════════════════════════════════════════════ */
+/* ASSET MARKER ICON SYSTEM                       */
+/* ═══════════════════════════════════════════════ */
+.asset-marker-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.asset-marker-icon {
+  transition: transform 0.2s ease, filter 0.2s ease;
+  cursor: pointer;
+}
+
+.asset-marker-icon:hover {
+  transform: scale(1.4) !important;
+  z-index: 9999 !important;
+}
+
+/* Neon pulse disabled — shadow removed */
+@keyframes neon-pulse-r {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+.neon-pulse-red {
+  animation: neon-pulse-r 1.4s ease-in-out infinite !important;
+}
+
+/* Neon pulse disabled — shadow removed */
+@keyframes neon-pulse-y {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+.neon-pulse-yellow {
+  animation: neon-pulse-y 2s ease-in-out infinite !important;
+}
+
+/* Neon pulse disabled — shadow removed */
+@keyframes neon-pulse-o {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.15); opacity: 1; }
+}
+.neon-pulse-orange {
+  animation: neon-pulse-o 0.8s ease-in-out infinite !important;
+}
+
+/* Blink toggle for selected marker — no glow */
+.marker-selected-blink .asset-marker-icon {
+  filter: brightness(1.3) !important;
+  transform: scale(1.4) !important;
+}
+
+/* ═══════════════════════════════════════════════ */
+/* PROGRESS DASHBOARD — MAP & UI STYLES          */
+/* ═══════════════════════════════════════════════ */
+
+/* Progress map marker wrapper */
+.progress-marker-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.progress-marker-wrapper div {
+  animation: marker-pop 0.4s ease-out;
+}
+
+@keyframes marker-pop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Seksi marker pulse animation */
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Progress map popup */
+.progress-popup .leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.97) !important;
+  border: 1px solid rgba(59, 130, 246, 0.25) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(59,130,246,0.1) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.progress-popup .leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.97) !important;
+  border: 1px solid rgba(59, 130, 246, 0.25) !important;
+}
+.progress-popup .leaflet-popup-content {
+  margin: 10px 12px !important;
+}
+
+/* Seksi popup */
+.seksi-popup .leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.98) !important;
+  border: 1px solid rgba(6, 182, 212, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(6,182,212,0.15) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.seksi-popup .leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.98) !important;
+  border: 1px solid rgba(6, 182, 212, 0.3) !important;
+}
+.seksi-popup .leaflet-popup-content {
+  margin: 12px 14px !important;
+}
+
+/* Route glow animation */
+@keyframes dash-flow {
+  to { stroke-dashoffset: -20; }
+}
+
+/* Glass scrollbar */
+.glass-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.glass-scroll::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.03);
+}
+.glass-scroll::-webkit-scrollbar-thumb {
+  background: rgba(59,130,246,0.25);
+  border-radius: 10px;
+}
+.glass-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(59,130,246,0.4);
+}
+
+/* Dark modern Leaflet popup */
+.leaflet-popup-content-wrapper {
+  background: rgba(17, 24, 39, 0.95) !important;
+  color: #e5e7eb !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04) !important;
+  padding: 0 !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.leaflet-popup-content {
+  margin: 12px 14px !important;
+  line-height: 1.5 !important;
+}
+.leaflet-popup-tip {
+  background: rgba(17, 24, 39, 0.95) !important;
+}
+.leaflet-popup-close-button {
+  color: #6b7280 !important;
+  font-size: 18px !important;
+  top: 6px !important;
+  right: 8px !important;
+}
+.leaflet-popup-close-button:hover {
+  color: #fff !important;
+}
+
 /* Login page animations */
 @keyframes fade-in {
   from {
