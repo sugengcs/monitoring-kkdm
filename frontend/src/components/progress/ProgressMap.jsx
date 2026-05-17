@@ -1,11 +1,19 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
-import { Upload, Map as MapIcon, Layers } from 'lucide-react';
-import * as toGeoJSON from '@mapbox/togeojson';
+import { Map as MapIcon } from 'lucide-react';
 
 // Dark map tiles - CartoDB Dark Matter
 const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 const TILE_ATTRIB = '&copy; OpenStreetMap &copy; CARTO';
+
+// Section color mapping
+const seksiColors = {
+  'SEKSI 1A': '#06B6D4',
+  'SEKSI 1B': '#8B5CF6',
+  'SEKSI 1C': '#EC4899',
+  'SEKSI 2A': '#F59E0B',
+  'SEKSI 2B': '#10B981',
+};
 
 // Demo Becakayu route polyline (approximate coordinates for visualization)
 const BECAKAYU_ROUTE = [
@@ -18,8 +26,31 @@ const ProgressMap = () => {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layersRef = useRef([]);
-  const [kmzLoaded, setKmzLoaded] = useState(false);
-  const [uploading, setUploading] = useState(false);
+
+  // Add CSS for neon glow animation
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .leaflet-interactive {
+        filter:
+          drop-shadow(0 0 4px currentColor)
+          drop-shadow(0 0 10px currentColor)
+          drop-shadow(0 0 18px currentColor);
+      }
+      @keyframes float-pulse {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-5px); }
+      }
+      @keyframes neon-pulse {
+        0%, 100% { opacity: 0.25; }
+        50% { opacity: 0.4; }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
 
   // Initialize map
   useEffect(() => {
@@ -63,13 +94,13 @@ const ProgressMap = () => {
     glowLine.bringToBack();
     layersRef.current.push(glowLine);
 
-    // Demo progress markers per seksi
+    // Demo progress markers per seksi with new color scheme
     const seksiMarkers = [
-      { pos: [-6.2100, 106.9400], name: 'Seksi 1A', persen: 92, color: '#22c55e' },
-      { pos: [-6.2250, 106.9410], name: 'Seksi 1B', persen: 78, color: '#eab308' },
-      { pos: [-6.2350, 106.9390], name: 'Seksi 1C', persen: 45, color: '#ef4444' },
-      { pos: [-6.2500, 106.9350], name: 'Seksi 2A', persen: 88, color: '#22c55e' },
-      { pos: [-6.2650, 106.9280], name: 'Seksi 2B', persen: 62, color: '#eab308' },
+      { pos: [-6.2100, 106.9400], name: 'Seksi 1A', persen: 94.3, color: seksiColors['SEKSI 1A'] },
+      { pos: [-6.2250, 106.9410], name: 'Seksi 1B', persen: 99.8, color: seksiColors['SEKSI 1B'] },
+      { pos: [-6.2350, 106.9390], name: 'Seksi 1C', persen: 100, color: seksiColors['SEKSI 1C'] },
+      { pos: [-6.2500, 106.9350], name: 'Seksi 2A', persen: 100, color: seksiColors['SEKSI 2A'] },
+      { pos: [-6.2650, 106.9280], name: 'Seksi 2B', persen: 68.1, color: seksiColors['SEKSI 2B'] },
     ];
 
     seksiMarkers.forEach(({ pos, name, persen, color }) => {
@@ -113,61 +144,7 @@ const ProgressMap = () => {
     };
   }, []);
 
-  // KMZ / KML file upload handler
-  const handleFileUpload = useCallback(async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
 
-    try {
-      const text = await file.text();
-      const parser = new DOMParser();
-      const xml = parser.parseFromString(text, 'text/xml');
-      const geojson = toGeoJSON.kml(xml);
-
-      // Clear previous KMZ layers
-      layersRef.current.forEach(layer => {
-        if (layer._isKmzLayer) mapInstanceRef.current.removeLayer(layer);
-      });
-      layersRef.current = layersRef.current.filter(l => !l._isKmzLayer);
-
-      // Add GeoJSON to map
-      if (geojson && geojson.features) {
-        const layer = L.geoJSON(geojson, {
-          style: (feature) => {
-            if (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString') {
-              return { color: '#06B6D4', weight: 3, opacity: 0.9 };
-            }
-            return { color: '#3B82F6', weight: 2, fillColor: '#3B82F6', fillOpacity: 0.4 };
-          },
-          pointToLayer: (feature, latlng) => {
-            return L.circleMarker(latlng, {
-              radius: 6,
-              fillColor: '#3B82F6',
-              color: '#fff',
-              weight: 1.5,
-              opacity: 1,
-              fillOpacity: 0.8,
-            });
-          },
-          onEachFeature: (feature, layer) => {
-            const name = feature.properties?.name || 'Unnamed';
-            layer.bindPopup(`<div style="font-size:12px;color:#fff;"><strong>${name}</strong></div>`);
-          },
-        }).addTo(mapInstanceRef.current);
-        layer._isKmzLayer = true;
-        layersRef.current.push(layer);
-
-        mapInstanceRef.current.fitBounds(layer.getBounds(), { padding: [60, 60] });
-        setKmzLoaded(true);
-      }
-    } catch (err) {
-      console.error('KML parse error:', err);
-      alert('Gagal memuat file. Pastikan format KML/KMZ valid.\nUntuk KMZ, extract file .kml terlebih dahulu.');
-    } finally {
-      setUploading(false);
-    }
-  }, []);
 
   return (
     <div
@@ -189,30 +166,16 @@ const ProgressMap = () => {
             Peta interaktif jalur Tol Becakayu dengan marker progress
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {kmzLoaded && (
-            <span className="text-[10px] px-2 py-1 rounded-md bg-green-500/15 text-green-400 border border-green-500/30">
-              KMZ Loaded
-            </span>
-          )}
-          <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white cursor-pointer transition-all hover:scale-105"
-            style={{
-              background: 'linear-gradient(135deg, #3B82F6, #06B6D4)',
-              boxShadow: '0 0 12px rgba(59,130,246,0.3)',
-            }}
-          >
-            <Upload className="w-3.5 h-3.5" />
-            {uploading ? 'Loading...' : 'Upload KML'}
-            <input type="file" accept=".kml,.kmz" className="hidden" onChange={handleFileUpload} />
-          </label>
-        </div>
       </div>
 
       {/* Map */}
-      <div
-        ref={mapContainerRef}
-        style={{ width: '100%', height: 420, background: '#0B1120' }}
-      />
+      <div className="relative">
+        <div
+          ref={mapContainerRef}
+          style={{ width: '100%', height: 420, background: '#0B1120' }}
+        />
+
+      </div>
 
       {/* Legend overlay */}
       <div

@@ -5,7 +5,6 @@ import Header from '../components/progress/Header';
 import KpiCards from '../components/progress/KpiCards';
 import ProgressChart from '../components/progress/ProgressChart';
 import ProgressTable from '../components/progress/ProgressTable';
-import ProgressMap from '../components/progress/ProgressMap';
 import NotificationPanel from '../components/progress/NotificationPanel';
 
 const ProgressDashboard = () => {
@@ -94,7 +93,6 @@ const ProgressDashboard = () => {
                 {/* Left column: Chart + Table */}
                 <div className="xl:col-span-2 space-y-6">
                   <ProgressChart lahanData={lahanData} />
-                  <ProgressMap />
                   <ProgressTable lahanData={lahanData} />
                 </div>
 

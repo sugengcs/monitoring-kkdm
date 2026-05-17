@@ -41,6 +41,7 @@ app.use('/api/maintenance', require('./routes/maintenance'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/progress-lahan', require('./routes/progressLahan'));
+app.use('/api/gis-layers', require('./routes/gisLayers'));
 
 // Health check
 app.get('/api/health', (req, res) => {

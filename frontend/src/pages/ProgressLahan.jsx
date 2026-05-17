@@ -5,7 +5,6 @@ import KpiCardsHorizontal from '../components/progress/KpiCardsHorizontal';
 import ProgressSeksiCards from '../components/progress/ProgressSeksiCards';
 import BecakayuMap from '../components/progress/BecakayuMap';
 import ProgressDataTable from '../components/progress/ProgressDataTable';
-import MapErrorBoundary from '../components/progress/MapErrorBoundary';
 
 const ProgressLahan = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -375,9 +374,7 @@ const ProgressLahan = () => {
                   onEditCancel={handleEditCancel}
                 />
               </div>
-              <MapErrorBoundary className="h-full min-h-0">
-                <BecakayuMap lahanData={lahanData} />
-              </MapErrorBoundary>
+              <BecakayuMap lahanData={lahanData} />
             </div>
           </>
         )}

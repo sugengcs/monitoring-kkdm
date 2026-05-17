@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import { Search, Layers, Map as MapIcon, Maximize2, Download, Upload, ZoomIn } from 'lucide-react';
 import toGeoJSON from '@mapbox/togeojson';
+import shp from 'shpjs';
+import JSZip from 'jszip';
+import api from '../../utils/api';
 
 // Seksi colors matching ProgressSeksiCards
 const SEKSI_COLORS = {
@@ -59,45 +62,39 @@ const BecakayuMap = ({ lahanData }) => {
   const [mouseCoords, setMouseCoords] = useState({ lat: 0, lng: 0 });
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadedLayers, setUploadedLayers] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [highlightedSeksi, setHighlightedSeksi] = useState(null);
 
-  // Load saved layers from localStorage on mount
+  // Load layers from database on mount
   useEffect(() => {
-    const savedLayers = localStorage.getItem('becakayu_gis_layers');
-    if (savedLayers) {
-      try {
-        const parsed = JSON.parse(savedLayers);
-        // Only load metadata, don't set state yet
-        // This will trigger the restoration effect
-        setUploadedLayers(parsed);
-        restoredLayersRef.current = false; // Reset to allow restoration
-      } catch (e) {
-        console.error('Failed to load saved layers:', e);
-      }
-    }
+    fetchLayers();
   }, []);
 
-  // Save layers to localStorage whenever they change
-  useEffect(() => {
+  const fetchLayers = async () => {
     try {
-      if (uploadedLayers.length > 0) {
-        // Only save necessary data, exclude the Leaflet layer object
-        const layersToSave = uploadedLayers.map(l => ({
-          id: l.id,
-          name: l.name,
-          visible: l.visible,
-          geojson: l.geojson,
+      setLoading(true);
+      const response = await api.get('/gis-layers');
+      if (response.data.success) {
+        const layers = response.data.data.map(layer => ({
+          id: layer.id,
+          name: layer.name,
+          filename: layer.filename,
+          file_type: layer.file_type,
+          seksi: layer.seksi,
+          color: layer.color,
+          geojson: layer.geojson ? JSON.parse(layer.geojson) : null,
+          visible: true,
         }));
-        localStorage.setItem('becakayu_gis_layers', JSON.stringify(layersToSave));
-      } else {
-        localStorage.removeItem('becakayu_gis_layers');
+        setUploadedLayers(layers);
       }
-    } catch (err) {
-      console.error('Failed to save layers to localStorage:', err);
-      // Don't crash if localStorage fails
+    } catch (error) {
+      console.error('Error fetching layers:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [uploadedLayers]);
+  };
+
 
   // Initialize map
   useEffect(() => {
@@ -154,7 +151,7 @@ const BecakayuMap = ({ lahanData }) => {
     }
   }, []);
 
-  // Restore saved layers after map is initialized and data is loaded
+  // Restore layers after map is initialized and data is loaded
   useEffect(() => {
     if (!mapInstanceRef.current || restoredLayersRef.current || uploadedLayers.length === 0) return;
 
@@ -165,8 +162,8 @@ const BecakayuMap = ({ lahanData }) => {
       .filter(saved => saved.geojson && saved.visible)
       .map((saved) => {
         try {
-          const seksiName = saved.seksiName || detectSeksi(saved.name);
-          const colors = SEKSI_COLORS[seksiName] || { color: '#3B82F6', gradient: 'linear-gradient(135deg, #3B82F6, #2563EB)' };
+          const seksiName = saved.seksi || detectSeksi(saved.name);
+          const colors = SEKSI_COLORS[seksiName] || { color: saved.color || '#3B82F6', gradient: 'linear-gradient(135deg, #3B82F6, #2563EB)' };
 
           const layer = L.geoJSON(saved.geojson, {
             style: {
@@ -207,7 +204,6 @@ const BecakayuMap = ({ lahanData }) => {
               persen = totalKeb > 0 ? ((totalReal / totalKeb) * 100) : 0;
             }
 
-            // Determine color based on progress
             let progressColor = colors.color;
             if (persen >= 90) progressColor = '#22C55E';
             else if (persen >= 70) progressColor = '#06B6D4';
@@ -215,7 +211,7 @@ const BecakayuMap = ({ lahanData }) => {
             else progressColor = '#EF4444';
 
             const center = layer.getBounds().getCenter();
-          const iconHtml = `
+            const iconHtml = `
               <div style="
                 min-width:55px;
                 padding:4px 8px;
@@ -290,11 +286,10 @@ const BecakayuMap = ({ lahanData }) => {
     setUploadedLayers(restored);
     restoredLayersRef.current = true;
 
-    // Fit map to all layers
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
     }
-  }, [uploadedLayers.length, lahanData]);
+  }, [uploadedLayers, lahanData]);
 
   // Basemap switch
   const handleBasemapChange = (type) => {
@@ -304,193 +299,201 @@ const BecakayuMap = ({ lahanData }) => {
     setBasemap(type);
   };
 
-  // File upload handler
+  // File upload handler - supports KML, KMZ, GeoJSON, SHP, ZIP
   const handleFileUpload = useCallback(async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Check map instance
     if (!mapInstanceRef.current) {
       alert('Peta belum siap. Tunggu beberapa saat dan coba lagi.');
       e.target.value = '';
       return;
     }
 
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('File terlalu besar. Maksimal 5MB.');
+    // Check file size (max 50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      alert('File terlalu besar. Maksimal 50MB.');
       e.target.value = '';
       return;
     }
 
     try {
-      const text = await file.text();
-
-      // Check if content size is too large for localStorage (max ~2-3MB safe)
-      const contentSize = new Blob([text]).size;
-      if (contentSize > 2 * 1024 * 1024) {
-        alert('File terlalu besar untuk disimpan. Layer tidak akan persist setelah refresh.');
-      }
-
+      setLoading(true);
       let geojson;
+      const fileExt = file.name.toLowerCase().split('.').pop();
 
-      // Try to parse as KML
-      if (file.name.toLowerCase().endsWith('.kml') || file.name.toLowerCase().endsWith('.kmz')) {
-        try {
-          const parser = new DOMParser();
-          const xml = parser.parseFromString(text, 'text/xml');
-          geojson = toGeoJSON.kml(xml);
-        } catch (kmlErr) {
-          throw new Error('Gagal parse KML: ' + kmlErr.message);
+      // Detect Seksi from file name
+      const seksiName = detectSeksi(file.name);
+      
+      // Parse based on file type
+      if (fileExt === 'kml') {
+        const text = await file.text();
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(text, 'text/xml');
+        geojson = toGeoJSON.kml(xml);
+      } else if (fileExt === 'kmz') {
+        const zip = await JSZip.loadAsync(file);
+        const kmlFile = Object.keys(zip.files).find(name => name.toLowerCase().endsWith('.kml'));
+        if (!kmlFile) {
+          throw new Error('File KMZ tidak mengandung file KML');
         }
-      }
-      // Try to parse as GeoJSON
-      else if (file.name.toLowerCase().endsWith('.geojson') || file.name.toLowerCase().endsWith('.json')) {
-        try {
-          geojson = JSON.parse(text);
-        } catch (jsonErr) {
-          throw new Error('Gagal parse GeoJSON: ' + jsonErr.message);
-        }
+        const kmlContent = await zip.file(kmlFile).async('string');
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(kmlContent, 'text/xml');
+        geojson = toGeoJSON.kml(xml);
+      } else if (fileExt === 'geojson' || fileExt === 'json') {
+        const text = await file.text();
+        geojson = JSON.parse(text);
+      } else if (fileExt === 'shp' || fileExt === 'zip') {
+        const arrayBuffer = await file.arrayBuffer();
+        geojson = await shp(arrayBuffer);
       } else {
-        throw new Error('Format file tidak didukung. Gunakan .kml, .kmz, atau .geojson');
+        throw new Error('Format file tidak didukung. Gunakan .kml, .kmz, .geojson, .shp, atau .zip');
       }
 
       if (geojson?.features && geojson.features.length > 0) {
-        // Detect Seksi from file name
-        const seksiName = detectSeksi(file.name);
-        const colors = SEKSI_COLORS[seksiName] || { color: '#3B82F6', gradient: 'linear-gradient(135deg, #3B82F6, #2563EB)' };
+        // Upload file to backend
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('name', file.name);
+        formData.append('seksi', seksiName || '');
 
-        // Create main layer
-        const layer = L.geoJSON(geojson, {
-          style: {
-            color: colors.color,
-            weight: 3,
-            fillColor: colors.color,
-            fillOpacity: 0.2,
-          },
-          onEachFeature: (f, l) => {
-            l.bindPopup(`
-              <div style="min-width:200px;font-family:Inter,sans-serif;">
-                <h4 style="margin:0 0 8px;font-size:14px;font-weight:700;color:#fff;">${f.properties?.name || file.name}</h4>
-                ${seksiName ? `<p style="margin:0;font-size:12px;color:${colors.color};font-weight:600;">${seksiName}</p>` : ''}
-              </div>
-            `, { maxWidth: 250, className: 'seksi-popup' });
-          },
-        }).addTo(mapInstanceRef.current);
-
-        // Create neon glow layer (duplicate with higher weight and opacity)
-        const glowLayer = L.geoJSON(geojson, {
-          style: {
-            color: colors.color,
-            weight: 10,
-            opacity: 0.3,
-            fillColor: colors.color,
-            fillOpacity: 0.1,
-          },
-        }).addTo(mapInstanceRef.current);
-        glowLayer.bringToBack();
-
-        // Add marker at center with percentage if Seksi detected
-        if (seksiName && layer.getBounds().isValid()) {
-          // Calculate percentage from lahanData
-          const seksiData = lahanData.filter(item => item.lokasi === seksiName);
-          let persen = 0;
-          if (seksiData.length > 0) {
-            const totalKeb = seksiData.reduce((sum, item) => sum + (parseFloat((item.kebutuhan || '0').toString().replace(/,/g, '')) || 0), 0);
-            const totalReal = seksiData.reduce((sum, item) => sum + (parseFloat((item.realisasi || '0').toString().replace(/,/g, '')) || 0), 0);
-            persen = totalKeb > 0 ? ((totalReal / totalKeb) * 100) : 0;
-          }
-
-          // Determine color based on progress
-          let progressColor = colors.color;
-          if (persen >= 90) progressColor = '#22C55E'; // Green for completed
-          else if (persen >= 70) progressColor = '#06B6D4'; // Cyan for good
-          else if (persen >= 50) progressColor = '#F59E0B'; // Yellow for warning
-          else progressColor = '#EF4444'; // Red for low
-
-          const center = layer.getBounds().getCenter();
-          const iconHtml = `
-            <div style="
-              min-width:55px;
-              padding:4px 8px;
-              border-radius:6px;
-              background:rgba(11,17,32,0.95);
-              backdrop-filter:blur(12px);
-              border:2px solid ${progressColor}60;
-              box-shadow:0 0 16px ${progressColor}50, 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
-              font-family:Inter,sans-serif;
-              animation:float-pulse 3s ease-in-out infinite;
-            ">
-              <div style="
-                font-size:7px;
-                font-weight:700;
-                color:${progressColor};
-                letter-spacing:0.3px;
-                text-transform:uppercase;
-                margin-bottom:2px;
-                text-align:center;
-              ">${seksiName}</div>
-              <div style="
-                font-size:12px;
-                font-weight:900;
-                color:#fff;
-                text-shadow:0 0 12px ${progressColor}70;
-                text-align:center;
-              ">${persen.toFixed(1)}%</div>
-            </div>
-            <style>
-              @keyframes float-pulse {
-                0%, 100% { 
-                  transform: translateY(0px);
-                  box-shadow:0 0 16px ${progressColor}50, 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
-                }
-                50% { 
-                  transform: translateY(-1px);
-                  box-shadow:0 0 24px ${progressColor}70, 0 6px 28px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.2);
-                }
-              }
-            </style>
-          `;
-          const icon = L.divIcon({
-            className: 'seksi-marker-wrapper',
-            html: iconHtml,
-            iconSize: [55, 32],
-            iconAnchor: [27.5, 16],
-            popupAnchor: [0, -16],
-          });
-          const marker = L.marker(center, { icon }).addTo(mapInstanceRef.current);
-          marker.bindPopup(`
-            <div style="min-width:220px;font-family:Inter,sans-serif;padding:16px;background:rgba(11,17,32,0.95);border-radius:12px;border:1px solid ${colors.color}30;backdrop-filter:blur(12px);">
-              <h4 style="margin:0 0 12px;font-size:14px;font-weight:700;color:#fff;">${seksiName}</h4>
-              <p style="margin:0;font-size:12px;color:#94a3b8;">Progress: <strong style="color:${colors.color};">${persen.toFixed(2)}%</strong></p>
-              <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.1);margin:12px 0;overflow:hidden;">
-                <div style="height:100%;width:${Math.min(persen, 100)}%;background:${colors.gradient};border-radius:3px;box-shadow:0 0 12px ${colors.color}50;"></div>
-              </div>
-              <p style="margin:8px 0 0;font-size:11px;color:#64748b;">File: ${file.name}</p>
-            </div>
-          `, { maxWidth: 280, className: 'seksi-popup' });
-
-          // Store marker with layer
-          layer.marker = marker;
-        }
-
-        const newLayer = {
-          id: Date.now(),
-          name: file.name,
-          layer,
-          glowLayer,
-          visible: true,
-          seksiName,
-          geojson: contentSize > 2 * 1024 * 1024 ? null : geojson,
-        };
-
-        // Use functional update to avoid stale state
-        setUploadedLayers(prev => {
-          const updated = [...prev, newLayer];
-          return updated;
+        const uploadResponse = await api.post('/gis-layers/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
 
-        mapInstanceRef.current.fitBounds(layer.getBounds());
+        if (uploadResponse.data.success) {
+          const layerId = uploadResponse.data.data.id;
+
+          // Update GeoJSON to backend
+          await api.put(`/gis-layers/${layerId}/geojson`, { geojson });
+
+          // Render layer on map
+          const colors = SEKSI_COLORS[seksiName] || { color: '#3B82F6', gradient: 'linear-gradient(135deg, #3B82F6, #2563EB)' };
+
+          const layer = L.geoJSON(geojson, {
+            style: {
+              color: colors.color,
+              weight: 3,
+              fillColor: colors.color,
+              fillOpacity: 0.2,
+            },
+            onEachFeature: (f, l) => {
+              l.bindPopup(`
+                <div style="min-width:200px;font-family:Inter,sans-serif;">
+                  <h4 style="margin:0 0 8px;font-size:14px;font-weight:700;color:#fff;">${f.properties?.name || file.name}</h4>
+                  ${seksiName ? `<p style="margin:0;font-size:12px;color:${colors.color};font-weight:600;">${seksiName}</p>` : ''}
+                </div>
+              `, { maxWidth: 250, className: 'seksi-popup' });
+            },
+          }).addTo(mapInstanceRef.current);
+
+          const glowLayer = L.geoJSON(geojson, {
+            style: {
+              color: colors.color,
+              weight: 10,
+              opacity: 0.3,
+              fillColor: colors.color,
+              fillOpacity: 0.1,
+            },
+          }).addTo(mapInstanceRef.current);
+          glowLayer.bringToBack();
+
+          // Add progress marker if Seksi detected
+          if (seksiName && layer.getBounds().isValid()) {
+            const seksiData = lahanData.filter(item => item.lokasi === seksiName);
+            let persen = 0;
+            if (seksiData.length > 0) {
+              const totalKeb = seksiData.reduce((sum, item) => sum + (parseFloat((item.kebutuhan || '0').toString().replace(/,/g, '')) || 0), 0);
+              const totalReal = seksiData.reduce((sum, item) => sum + (parseFloat((item.realisasi || '0').toString().replace(/,/g, '')) || 0), 0);
+              persen = totalKeb > 0 ? ((totalReal / totalKeb) * 100) : 0;
+            }
+
+            let progressColor = colors.color;
+            if (persen >= 90) progressColor = '#22C55E';
+            else if (persen >= 70) progressColor = '#06B6D4';
+            else if (persen >= 50) progressColor = '#F59E0B';
+            else progressColor = '#EF4444';
+
+            const center = layer.getBounds().getCenter();
+            const iconHtml = `
+              <div style="
+                min-width:55px;
+                padding:4px 8px;
+                border-radius:6px;
+                background:rgba(11,17,32,0.95);
+                backdrop-filter:blur(12px);
+                border:2px solid ${progressColor}60;
+                box-shadow:0 0 16px ${progressColor}50, 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+                font-family:Inter,sans-serif;
+                animation:float-pulse 3s ease-in-out infinite;
+              ">
+                <div style="
+                  font-size:7px;
+                  font-weight:700;
+                  color:${progressColor};
+                  letter-spacing:0.3px;
+                  text-transform:uppercase;
+                  margin-bottom:2px;
+                  text-align:center;
+                ">${seksiName}</div>
+                <div style="
+                  font-size:12px;
+                  font-weight:900;
+                  color:#fff;
+                  text-shadow:0 0 12px ${progressColor}70;
+                  text-align:center;
+                ">${persen.toFixed(1)}%</div>
+              </div>
+              <style>
+                @keyframes float-pulse {
+                  0%, 100% { 
+                    transform: translateY(0px);
+                    box-shadow:0 0 16px ${progressColor}50, 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+                  }
+                  50% { 
+                    transform: translateY(-1px);
+                    box-shadow:0 0 24px ${progressColor}70, 0 6px 28px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.2);
+                  }
+                }
+              </style>
+            `;
+            const icon = L.divIcon({
+              className: 'seksi-marker-wrapper',
+              html: iconHtml,
+              iconSize: [55, 32],
+              iconAnchor: [27.5, 16],
+              popupAnchor: [0, -16],
+            });
+            const marker = L.marker(center, { icon }).addTo(mapInstanceRef.current);
+            marker.bindPopup(`
+              <div style="min-width:220px;font-family:Inter,sans-serif;padding:16px;background:rgba(11,17,32,0.95);border-radius:12px;border:1px solid ${colors.color}30;backdrop-filter:blur(12px);">
+                <h4 style="margin:0 0 12px;font-size:14px;font-weight:700;color:#fff;">${seksiName}</h4>
+                <p style="margin:0;font-size:12px;color:#94a3b8;">Progress: <strong style="color:${colors.color};">${persen.toFixed(2)}%</strong></p>
+                <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.1);margin:12px 0;overflow:hidden;">
+                  <div style="height:100%;width:${Math.min(persen, 100)}%;background:${colors.gradient};border-radius:3px;box-shadow:0 0 12px ${colors.color}50;"></div>
+                </div>
+                <p style="margin:8px 0 0;font-size:11px;color:#64748b;">File: ${file.name}</p>
+              </div>
+            `, { maxWidth: 280, className: 'seksi-popup' });
+
+            layer.marker = marker;
+          }
+
+          const newLayer = {
+            id: layerId,
+            name: file.name,
+            layer,
+            glowLayer,
+            visible: true,
+            seksiName,
+            geojson,
+          };
+
+          setUploadedLayers(prev => [...prev, newLayer]);
+          mapInstanceRef.current.fitBounds(layer.getBounds());
+          alert('File berhasil diupload!');
+        }
       } else {
         alert('File tidak mengandung data GIS valid (tidak ada features).');
       }
@@ -498,9 +501,10 @@ const BecakayuMap = ({ lahanData }) => {
       console.error('Upload error:', err);
       alert('Gagal memuat file: ' + (err.message || 'Unknown error'));
     } finally {
-      e.target.value = ''; // Reset file input
+      e.target.value = '';
+      setLoading(false);
     }
-  }, []);
+  }, [lahanData]);
 
   // Toggle layer visibility
   const toggleLayer = (id) => {
@@ -522,8 +526,8 @@ const BecakayuMap = ({ lahanData }) => {
     }
   };
 
-  // Remove layer
-  const removeLayer = (id) => {
+  // Remove layer - uses backend API
+  const removeLayer = async (id) => {
     try {
       const layer = uploadedLayers.find(l => l.id === id);
       if (!layer) {
@@ -537,33 +541,33 @@ const BecakayuMap = ({ lahanData }) => {
         return;
       }
 
-      // Remove main layer
+      // Remove from map
       if (layer.layer && map.hasLayer(layer.layer)) {
         map.removeLayer(layer.layer);
       }
-
-      // Remove glow layer
       if (layer.glowLayer && map.hasLayer(layer.glowLayer)) {
         map.removeLayer(layer.glowLayer);
       }
-
-      // Remove marker
       if (layer.marker && map.hasLayer(layer.marker)) {
         map.removeLayer(layer.marker);
       }
 
+      // Delete from backend
+      await api.delete(`/gis-layers/${id}`);
+
       // Remove from state
       setUploadedLayers(prev => prev.filter(l => l.id !== id));
+      alert('Layer berhasil dihapus!');
     } catch (err) {
       console.error('Error removing layer:', err);
-      alert('Gagal menghapus layer: ' + err.message);
+      alert('Gagal menghapus layer: ' + (err.message || 'Unknown error'));
     }
   };
 
   // Zoom to layer
   const zoomToLayer = (id) => {
     const layer = uploadedLayers.find(l => l.id === id);
-    if (layer) {
+    if (layer && layer.layer) {
       mapInstanceRef.current.fitBounds(layer.layer.getBounds(), { padding: [50, 50] });
     }
   };
@@ -703,6 +707,44 @@ const BecakayuMap = ({ lahanData }) => {
     }
   };
 
+  // Clear uploaded layers
+  const handleClearLayers = async () => {
+    try {
+      // Remove all from map
+      uploadedLayers.forEach(item => {
+        if (item.layer && mapInstanceRef.current) {
+          mapInstanceRef.current.removeLayer(item.layer);
+        }
+        if (item.glowLayer && mapInstanceRef.current) {
+          mapInstanceRef.current.removeLayer(item.glowLayer);
+        }
+        if (item.marker && mapInstanceRef.current) {
+          mapInstanceRef.current.removeLayer(item.marker);
+        }
+      });
+      layersRef.current = [];
+
+      // Clear from backend
+      await api.delete('/gis-layers');
+      
+      setUploadedLayers([]);
+      alert('Semua layer berhasil dihapus!');
+    } catch (err) {
+      console.error('Error clearing layers:', err);
+      alert('Gagal menghapus semua layer: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  // Download layer - uses backend API
+  const handleDownloadLayer = async (id) => {
+    try {
+      window.open(`/api/gis-layers/${id}/download`, '_blank');
+    } catch (err) {
+      console.error('Error downloading layer:', err);
+      alert('Gagal mendownload layer: ' + (err.message || 'Unknown error'));
+    }
+  };
+
   return (
     <div
       className="rounded-2xl overflow-hidden flex flex-col h-full"
@@ -714,10 +756,51 @@ const BecakayuMap = ({ lahanData }) => {
       }}
     >
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 pb-0 flex-shrink-0">
-        <div>
-          <h2 className="text-sm font-bold text-white tracking-tight">Peta Lokasi</h2>
-          <p className="text-[10px] text-slate-500 mt-0.5">Visualisasi lokasi dan progres per seksi</p>
+      <div className="flex flex-col gap-3 p-4 pb-0 flex-shrink-0">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-white tracking-tight">Peta Lokasi</h2>
+            <p className="text-[10px] text-slate-500 mt-0.5">Visualisasi lokasi dan progres per seksi</p>
+          </div>
+          
+          {/* Upload GIS Button */}
+          <div className="flex gap-2">
+            <input
+              type="file"
+              accept=".kml,.kmz,.geojson,.json,.shp,.zip"
+              onChange={handleFileUpload}
+              disabled={loading}
+              style={{ display: 'none' }}
+              id="gis-upload"
+            />
+            <label
+              htmlFor="gis-upload"
+              className="px-4 py-2 rounded-lg text-xs font-medium text-white cursor-pointer transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: 'linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.9))',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(59,130,246,0.4)',
+                boxShadow: '0 4px 16px rgba(59,130,246,0.3)',
+              }}
+            >
+              {loading ? 'Uploading...' : 'Upload GIS'}
+            </label>
+            
+            {uploadedLayers.length > 0 && (
+              <button
+                onClick={handleClearLayers}
+                className="px-3 py-2 rounded-lg text-xs font-medium text-white cursor-pointer transition-all hover:scale-105"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(239,68,68,0.9), rgba(220,38,38,0.9))',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(239,68,68,0.4)',
+                  boxShadow: '0 4px 16px rgba(239,68,68,0.3)',
+                }}
+              >
+                Hapus Semua
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -772,38 +855,89 @@ const BecakayuMap = ({ lahanData }) => {
           </button>
         </div>
 
-        {/* Seksi Legend */}
-        <div className="absolute bottom-12 left-3 right-3 z-[1000]">
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            {SEKSI_ORDER.map((name) => {
-              const colors = SEKSI_COLORS[name];
-              const isHighlighted = highlightedSeksi === name;
+        {/* Legend Section */}
+        <div
+          className="absolute top-3 left-3 rounded-xl px-3 py-2 text-[9px] z-[1000]"
+          style={{
+            background: 'rgba(11,17,32,0.9)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+          }}
+        >
+          <p className="text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[8px]">Keterangan</p>
+          <div className="flex items-center gap-3 flex-wrap">
+            {SEKSI_ORDER.map(seksi => {
+              const colors = SEKSI_COLORS[seksi];
+              const seksiData = lahanData.filter(item => item.lokasi === seksi);
+              let persen = 0;
+              if (seksiData.length > 0) {
+                const totalKeb = seksiData.reduce((sum, item) => sum + (parseFloat((item.kebutuhan || '0').toString().replace(/,/g, '')) || 0), 0);
+                const totalReal = seksiData.reduce((sum, item) => sum + (parseFloat((item.realisasi || '0').toString().replace(/,/g, '')) || 0), 0);
+                persen = totalKeb > 0 ? ((totalReal / totalKeb) * 100) : 0;
+              }
+
               return (
-                <div
-                  key={name}
-                  onClick={() => handleLegendClick(name)}
-                  className="flex items-center gap-2 cursor-pointer px-4 py-2 rounded-full transition-all"
-                  style={{
-                    background: isHighlighted ? `${colors.color}40` : 'rgba(11,17,32,0.8)',
-                    border: `1px solid ${colors.color}60`,
-                    opacity: isHighlighted ? 1 : 0.8,
-                    backdropFilter: 'blur(8px)',
-                  }}
-                >
+                <div key={seksi} className="flex items-center gap-1.5">
                   <span
-                    className="w-3 h-3 rounded-full"
+                    className="w-2 h-2 rounded-full flex-shrink-0"
                     style={{
                       background: colors.color,
-                      boxShadow: isHighlighted ? `0 0 12px ${colors.color}` : `0 0 6px ${colors.color}60`,
-                      animation: isHighlighted ? 'pulse 1s infinite' : 'none'
+                      boxShadow: `0 0 8px ${colors.color}`,
                     }}
                   />
-                  <span className="text-[11px] text-slate-200 font-medium">{name}</span>
+                  <span className="text-slate-300 font-medium">{seksi}</span>
+                  <span className="text-white font-bold" style={{ color: colors.color }}>{persen.toFixed(1)}%</span>
                 </div>
               );
             })}
           </div>
         </div>
+
+        {/* Uploaded layers with download and delete buttons */}
+        {uploadedLayers.length > 0 && (
+          <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+            {uploadedLayers.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg"
+                style={{
+                  background: `${item.color || '#3B82F6'}20`,
+                  border: `1px solid ${item.color || '#3B82F6'}50`,
+                  backdropFilter: 'blur(12px)',
+                }}
+              >
+                <span
+                  className="w-1 h-1 rounded-full"
+                  style={{ background: item.color || '#3B82F6' }}
+                />
+                <span className="text-[7px] text-white font-medium max-w-20 truncate">{item.name}</span>
+                <button
+                  onClick={() => handleDownloadLayer(item.id)}
+                  className="w-3 h-3 rounded flex items-center justify-center text-green-400 hover:text-green-300 hover:bg-green-500/30 transition-all text-[7px]"
+                  style={{
+                    background: 'rgba(34,197,94,0.1)',
+                    border: '1px solid rgba(34,197,94,0.3)',
+                  }}
+                  title="Download"
+                >
+                  ↓
+                </button>
+                <button
+                  onClick={() => removeLayer(item.id)}
+                  className="w-3 h-3 rounded flex items-center justify-center text-red-400 hover:text-red-300 hover:bg-red-500/30 transition-all text-[7px]"
+                  style={{
+                    background: 'rgba(239,68,68,0.1)',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                  }}
+                  title="Hapus"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
