@@ -286,6 +286,27 @@ const createTables = () => {
     )
   `);
 
+  // Maintenance Budget (Anggaran Pemeliharaan)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS maintenance_budget (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kategori TEXT NOT NULL CHECK(kategori IN ('Perbaikan Jalan', 'Drainase', 'Lampu PJU', 'Marka Jalan', 'Guardrail', 'Landscape')),
+      lokasi TEXT NOT NULL,
+      anggaran REAL NOT NULL DEFAULT 0,
+      realisasi REAL NOT NULL DEFAULT 0,
+      sisa REAL NOT NULL DEFAULT 0,
+      progress INTEGER DEFAULT 0 CHECK(progress >= 0 AND progress <= 100),
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'progress', 'selesai')),
+      latitude REAL,
+      longitude REAL,
+      tanggal TEXT,
+      keterangan TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_by INTEGER
+    )
+  `);
+
   console.log('Tables created successfully');
 };
 
@@ -324,6 +345,23 @@ const insertSampleData = () => {
 
   const insertAsset = db.prepare('INSERT OR IGNORE INTO assets (asset_code, name, category_id, location_lat, location_lng, sta, ruas, condition_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
   assets.forEach(asset => insertAsset.run(asset.asset_code, asset.name, asset.category_id, asset.location_lat, asset.location_lng, asset.sta, asset.ruas, asset.condition_status));
+
+  // Insert sample maintenance budget data
+  const maintenanceBudgets = [
+    { kategori: 'Perbaikan Jalan', lokasi: 'KM 10+500', anggaran: 50000000, realisasi: 35000000, sisa: 15000000, progress: 70, status: 'progress', latitude: -6.2347001, longitude: 106.9321978, tanggal: '2024-01-15', keterangan: 'Perbaikan perkerasan jalan' },
+    { kategori: 'Drainase', lokasi: 'KM 11+200', anggaran: 30000000, realisasi: 30000000, sisa: 0, progress: 100, status: 'selesai', latitude: -6.2355000, longitude: 106.9335000, tanggal: '2024-02-10', keterangan: 'Pembersihan saluran air' },
+    { kategori: 'Lampu PJU', lokasi: 'KM 10+800', anggaran: 25000000, realisasi: 10000000, sisa: 15000000, progress: 40, status: 'progress', latitude: -6.2360000, longitude: 106.9340000, tanggal: '2024-03-05', keterangan: 'Penggantian lampu PJU' },
+    { kategori: 'Marka Jalan', lokasi: 'KM 12+000', anggaran: 40000000, realisasi: 0, sisa: 40000000, progress: 0, status: 'pending', latitude: -6.2370000, longitude: 106.9350000, tanggal: '2024-04-01', keterangan: 'Pengecatan marka jalan' },
+    { kategori: 'Guardrail', lokasi: 'KM 9+500', anggaran: 60000000, realisasi: 55000000, sisa: 5000000, progress: 92, status: 'progress', latitude: -6.2335000, longitude: 106.9315000, tanggal: '2024-01-20', keterangan: 'Perbaikan guardrail' },
+    { kategori: 'Landscape', lokasi: 'KM 10+000', anggaran: 35000000, realisasi: 35000000, sisa: 0, progress: 100, status: 'selesai', latitude: -6.2340000, longitude: 106.9320000, tanggal: '2024-02-20', keterangan: 'Perawatan taman median' },
+    { kategori: 'Perbaikan Jalan', lokasi: 'KM 13+500', anggaran: 45000000, realisasi: 20000000, sisa: 25000000, progress: 44, status: 'progress', latitude: -6.2380000, longitude: 106.9360000, tanggal: '2024-03-15', keterangan: 'Patch perkerasan' },
+    { kategori: 'Drainase', lokasi: 'KM 14+000', anggaran: 28000000, realisasi: 0, sisa: 28000000, progress: 0, status: 'pending', latitude: -6.2390000, longitude: 106.9370000, tanggal: '2024-05-01', keterangan: 'Perbaikan box culvert' },
+    { kategori: 'Lampu PJU', lokasi: 'KM 11+800', anggaran: 22000000, realisasi: 22000000, sisa: 0, progress: 100, status: 'selesai', latitude: -6.2365000, longitude: 106.9345000, tanggal: '2024-02-28', keterangan: 'Pemasangan tiang PJU baru' },
+    { kategori: 'Marka Jalan', lokasi: 'KM 9+000', anggaran: 38000000, realisasi: 32000000, sisa: 6000000, progress: 84, status: 'progress', latitude: -6.2330000, longitude: 106.9310000, tanggal: '2024-04-10', keterangan: 'Refresh marka jalan' },
+  ];
+
+  const insertBudget = db.prepare('INSERT OR IGNORE INTO maintenance_budget (kategori, lokasi, anggaran, realisasi, sisa, progress, status, latitude, longitude, tanggal, keterangan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+  maintenanceBudgets.forEach(budget => insertBudget.run(budget.kategori, budget.lokasi, budget.anggaran, budget.realisasi, budget.sisa, budget.progress, budget.status, budget.latitude, budget.longitude, budget.tanggal, budget.keterangan));
 
   console.log('Sample data inserted successfully');
 };
