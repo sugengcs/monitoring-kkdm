@@ -52,58 +52,116 @@ const AnggaranPemeliharaan = () => {
   const itemsPerPage = 10;
   const tableItemsPerPage = 5;
 
-  const [monthlyData, setMonthlyData] = useState([
-    {
-      id: 1,
-      uraian: 'Pemeliharaan Kebersihan Jalan Tol',
-      status: 'Aktif',
-      tahun: '2026',
-      rencana: [50000000, 45000000, 50000000, 48000000, 52000000, 50000000, 51000000, 49000000, 50000000, 53000000, 51000000, 50000000],
-      realisasi: [48000000, 44000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    },
-    {
-      id: 2,
-      uraian: 'Perbaikan Marka Jalan',
-      status: 'Aktif',
-      tahun: '2026',
-      rencana: [30000000, 25000000, 30000000, 28000000, 32000000, 30000000, 31000000, 29000000, 30000000, 33000000, 31000000, 30000000],
-      realisasi: [28000000, 24000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    },
-    {
-      id: 3,
-      uraian: 'Pemeliharaan Lampu PJU',
-      status: 'Selesai',
-      tahun: '2026',
-      rencana: [20000000, 18000000, 20000000, 19000000, 21000000, 20000000, 20500000, 19500000, 20000000, 21500000, 20500000, 20000000],
-      realisasi: [20000000, 18000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    },
-    {
-      id: 4,
-      uraian: 'Perawatan Taman Median',
-      status: 'Aktif',
-      tahun: '2025',
-      rencana: [15000000, 12000000, 15000000, 14000000, 16000000, 15000000, 15500000, 14500000, 15000000, 16500000, 15500000, 15000000],
-      realisasi: [14000000, 11000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    },
-    {
-      id: 5,
-      uraian: 'Perbaikan Drainase',
-      status: 'Aktif',
-      tahun: '2025',
-      rencana: [25000000, 22000000, 25000000, 23000000, 27000000, 25000000, 26000000, 24000000, 25000000, 28000000, 26000000, 25000000],
-      realisasi: [23000000, 20000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    }
-  ]);
-
   const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
+  // Load monthly data from localStorage or use default
+  const [monthlyData, setMonthlyData] = useState(() => {
+    const saved = localStorage.getItem('monthlyBudgetData');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Error parsing saved monthly data:', e);
+        return [
+          {
+            id: 1,
+            uraian: 'Pemeliharaan Kebersihan Jalan Tol',
+            status: 'Aktif',
+            tahun: '2026',
+            rencana: [50000000, 45000000, 50000000, 48000000, 52000000, 50000000, 51000000, 49000000, 50000000, 53000000, 51000000, 50000000],
+            realisasi: [48000000, 44000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+          },
+          {
+            id: 2,
+            uraian: 'Perbaikan Marka Jalan',
+            status: 'Aktif',
+            tahun: '2026',
+            rencana: [30000000, 25000000, 30000000, 28000000, 32000000, 30000000, 31000000, 29000000, 30000000, 33000000, 31000000, 30000000],
+            realisasi: [28000000, 24000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+          },
+          {
+            id: 3,
+            uraian: 'Pemeliharaan Lampu PJU',
+            status: 'Selesai',
+            tahun: '2026',
+            rencana: [20000000, 18000000, 20000000, 19000000, 21000000, 20000000, 20500000, 19500000, 20000000, 21500000, 20500000, 20000000],
+            realisasi: [20000000, 18000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+          },
+          {
+            id: 4,
+            uraian: 'Perawatan Taman Median',
+            status: 'Aktif',
+            tahun: '2025',
+            rencana: [15000000, 12000000, 15000000, 14000000, 16000000, 15000000, 15500000, 14500000, 15000000, 16500000, 15500000, 15000000],
+            realisasi: [14000000, 11000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+          },
+          {
+            id: 5,
+            uraian: 'Perbaikan Drainase',
+            status: 'Aktif',
+            tahun: '2025',
+            rencana: [25000000, 22000000, 25000000, 23000000, 27000000, 25000000, 26000000, 24000000, 25000000, 28000000, 26000000, 25000000],
+            realisasi: [23000000, 20000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+          }
+        ];
+      }
+    }
+    return [
+      {
+        id: 1,
+        uraian: 'Pemeliharaan Kebersihan Jalan Tol',
+        status: 'Aktif',
+        tahun: '2026',
+        rencana: [50000000, 45000000, 50000000, 48000000, 52000000, 50000000, 51000000, 49000000, 50000000, 53000000, 51000000, 50000000],
+        realisasi: [48000000, 44000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      },
+      {
+        id: 2,
+        uraian: 'Perbaikan Marka Jalan',
+        status: 'Aktif',
+        tahun: '2026',
+        rencana: [30000000, 25000000, 30000000, 28000000, 32000000, 30000000, 31000000, 29000000, 30000000, 33000000, 31000000, 30000000],
+        realisasi: [28000000, 24000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      },
+      {
+        id: 3,
+        uraian: 'Pemeliharaan Lampu PJU',
+        status: 'Selesai',
+        tahun: '2026',
+        rencana: [20000000, 18000000, 20000000, 19000000, 21000000, 20000000, 20500000, 19500000, 20000000, 21500000, 20500000, 20000000],
+        realisasi: [20000000, 18000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      },
+      {
+        id: 4,
+        uraian: 'Perawatan Taman Median',
+        status: 'Aktif',
+        tahun: '2025',
+        rencana: [15000000, 12000000, 15000000, 14000000, 16000000, 15000000, 15500000, 14500000, 15000000, 16500000, 15500000, 15000000],
+        realisasi: [14000000, 11000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      },
+      {
+        id: 5,
+        uraian: 'Perbaikan Drainase',
+        status: 'Aktif',
+        tahun: '2025',
+        rencana: [25000000, 22000000, 25000000, 23000000, 27000000, 25000000, 26000000, 24000000, 25000000, 28000000, 26000000, 25000000],
+        realisasi: [23000000, 20000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      }
+    ];
+  });
+
+  // Save monthly data to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('monthlyBudgetData', JSON.stringify(monthlyData));
+  }, [monthlyData]);
+
   const availableYears = useMemo(() => {
-    const years = [...new Set(monthlyData.map(item => item.tahun).filter(Boolean))];
+    const years = [...new Set(monthlyData.map(item => item.tahun))];
     return years.sort().reverse();
   }, [monthlyData]);
 
   const formatRupiah = (number) => {
-    if (number === null || number === undefined || number === 0) {
+    if (number === null || number === undefined) {
       return '-';
     }
     return number.toLocaleString('id-ID');
@@ -252,12 +310,70 @@ const AnggaranPemeliharaan = () => {
       if (file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          alert(`Berhasil upload ${jsonData.length} data`);
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            
+            console.log('[Excel Upload] Raw data:', jsonData);
+            console.log('[Excel Upload] Columns:', Object.keys(jsonData[0] || {}));
+            
+            // Map Excel data to monthlyData format
+            // Template structure: 2 rows per item (Rencana + Realisasi)
+            const newData = [];
+            for (let i = 0; i < jsonData.length; i += 2) {
+              const rencanaRow = jsonData[i];
+              const realisasiRow = jsonData[i + 1];
+              
+              if (!rencanaRow) break;
+              
+              console.log(`[Excel Upload] Processing item ${i/2}:`, rencanaRow);
+              
+              // Get uraian from rencana row
+              const uraian = rencanaRow['Uraian'] || rencanaRow[' Uraian '] || 
+                             rencanaRow['uraian'] || rencanaRow[' uraian '] || 
+                             `Item ${newData.length + 1}`;
+              
+              // Get status from rencana row
+              const status = rencanaRow['Status'] || rencanaRow[' Status '] || 
+                             rencanaRow['status'] || rencanaRow[' status '] || 'Aktif';
+              
+              // Get tahun (default to current year if not specified)
+              const tahun = String(rencanaRow['Tahun'] || rencanaRow[' Tahun '] || 
+                                  rencanaRow['tahun'] || rencanaRow[' tahun '] || 
+                                  new Date().getFullYear());
+              
+              // Build rencana array from rencana row
+              const rencana = months.map((month) => {
+                const value = rencanaRow[month] || rencanaRow[` ${month} `] || 0;
+                console.log(`[Excel Upload] Month ${month}: ${value}`);
+                return value;
+              });
+              
+              // Build realisasi array from realisasi row (if exists)
+              const realisasi = realisasiRow ? months.map((month) => {
+                return realisasiRow[month] || realisasiRow[` ${month} `] || 0;
+              }) : months.map(() => 0);
+              
+              newData.push({
+                id: Date.now() + newData.length,
+                uraian,
+                status,
+                tahun,
+                rencana,
+                realisasi
+              });
+            }
+
+            console.log('[Excel Upload] Mapped data:', newData);
+            setMonthlyData(prevData => [...prevData, ...newData]);
+            alert(`Berhasil upload ${newData.length} data ke tabel`);
+          } catch (error) {
+            console.error('Error parsing Excel:', error);
+            alert('Gagal memproses file Excel. Pastikan format file benar.');
+          }
         };
         reader.readAsArrayBuffer(file);
       }
