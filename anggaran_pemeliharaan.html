@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anggaran Pemeliharaan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+        
+        .glass-card {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        .budget-table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        
+        .budget-table th {
+            background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+            color: white;
+            padding: 12px 8px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 13px;
+            border: 1px solid #3b82f6;
+        }
+        
+        .budget-table th.main-header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%);
+            font-size: 14px;
+        }
+        
+        .budget-table td {
+            padding: 10px 8px;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            font-size: 13px;
+        }
+        
+        .budget-table tbody tr:hover {
+            background: rgba(59, 130, 246, 0.1);
+        }
+        
+        .budget-table td.number {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .budget-table td.text {
+            text-align: left;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+        }
+        
+        .search-input {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid #334155;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            width: 250px;
+            transition: all 0.3s;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 24px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+        }
+        
+        .form-input {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid #334155;
+            color: white;
+            padding: 10px 12px;
+            border-radius: 8px;
+            width: 100%;
+            transition: all 0.3s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        
+        .form-label {
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            display: block;
+        }
+        
+        .pagination-btn {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid #3b82f6;
+            color: #3b82f6;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .pagination-btn:hover {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 lg:p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="glass-card rounded-2xl p-6 mb-6">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl lg:text-3xl font-bold text-white mb-2">Anggaran Pemeliharaan</h1>
+                    <p class="text-slate-400 text-sm">Monitoring dan Tracking Anggaran Pemeliharaan Jalan Tol</p>
+                </div>
+                <div class="flex flex-wrap gap-3">
+                    <button onclick="document.getElementById('fileInput').click()" class="btn-primary flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                        </svg>
+                        Upload Excel
+                    </button>
+                    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleFileUpload(event)">
+                    
+                    <button onclick="downloadExcel()" class="btn-success flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Download Excel
+                    </button>
+                    
+                    <button onclick="openModal()" class="btn-primary flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Tambah Data
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="glass-card rounded-2xl p-4 mb-6">
+            <div class="flex flex-col sm:flex-row gap-4 items-center">
+                <div class="relative flex-1 w-full">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <input type="text" id="searchInput" class="search-input pl-10" placeholder="Cari uraian pekerjaan..." oninput="filterData()">
+                </div>
+                <div class="text-slate-400 text-sm">
+                    Total: <span id="totalRecords" class="text-white font-semibold">0</span> data
+                </div>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="glass-card rounded-2xl p-6">
+            <div class="table-container">
+                <table class="budget-table" id="budgetTable">
+                    <thead>
+                        <tr>
+                            <th rowspan="2" class="main-header" style="width: 30%;">Uraian Pekerjaan</th>
+                            <th colspan="3" class="main-header">Rencana (Rp)</th>
+                            <th colspan="3" class="main-header">Realisasi (Rp)</th>
+                            <th rowspan="2" class="main-header" style="width: 120px;">Aksi</th>
+                        </tr>
+                        <tr>
+                            <th>sd. Maret 2026</th>
+                            <th>Apr-26</th>
+                            <th>sd. April 2026</th>
+                            <th>sd. Maret 2026</th>
+                            <th>Apr-26</th>
+                            <th>sd. April 2026</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Data will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="flex flex-col sm:flex-row items-center justify-between mt-6 pt-4 border-t border-slate-700">
+                <div class="text-slate-400 text-sm mb-3 sm:mb-0">
+                    Menampilkan <span id="showingFrom">0</span> - <span id="showingTo">0</span> dari <span id="showingTotal">0</span> data
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="changePage(-1)" class="pagination-btn" id="prevBtn">← Prev</button>
+                    <span class="px-4 py-2 text-slate-400" id="pageInfo">Halaman 1</span>
+                    <button onclick="changePage(1)" class="pagination-btn" id="nextBtn">Next →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Form -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xl font-bold text-white" id="modalTitle">Tambah Data</h2>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <form id="dataForm" onsubmit="saveData(event)">
+                <input type="hidden" id="editId">
+                <div class="space-y-4">
+                    <div>
+                        <label class="form-label">Uraian Pekerjaan</label>
+                        <input type="text" id="uraian" class="form-input" required>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="form-label">Rencana sd. Maret 2026</label>
+                            <input type="number" id="rencana_maret" class="form-input" value="0">
+                        </div>
+                        <div>
+                            <label class="form-label">Rencana Apr-26</label>
+                            <input type="number" id="rencana_april" class="form-input" value="0">
+                        </div>
+                        <div>
+                            <label class="form-label">Rencana sd. April 2026</label>
+                            <input type="number" id="rencana_sd_april" class="form-input" value="0">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="form-label">Realisasi sd. Maret 2026</label>
+                            <input type="number" id="realisasi_maret" class="form-input" value="0">
+                        </div>
+                        <div>
+                            <label class="form-label">Realisasi Apr-26</label>
+                            <input type="number" id="realisasi_april" class="form-input" value="0">
+                        </div>
+                        <div>
+                            <label class="form-label">Realisasi sd. April 2026</label>
+                            <input type="number" id="realisasi_sd_april" class="form-input" value="0">
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button type="submit" class="btn-primary flex-1">Simpan</button>
+                    <button type="button" onclick="closeModal()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg flex-1 transition-colors">Batal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Initial sample data
+        let budgetData = [
+            {
+                id: 1,
+                uraian: "Beban Pemeliharaan Perkerasan Jalan Tol",
+                rencana_maret: 150000000,
+                rencana_april: 50000000,
+                rencana_sd_april: 200000000,
+                realisasi_maret: 145000000,
+                realisasi_april: 48000000,
+                realisasi_sd_april: 193000000
+            },
+            {
+                id: 2,
+                uraian: "Upah",
+                rencana_maret: 75000000,
+                rencana_april: 25000000,
+                rencana_sd_april: 100000000,
+                realisasi_maret: 72000000,
+                realisasi_april: 24000000,
+                realisasi_sd_april: 96000000
+            },
+            {
+                id: 3,
+                uraian: "Material",
+                rencana_maret: 50000000,
+                rencana_april: 20000000,
+                rencana_sd_april: 70000000,
+                realisasi_maret: 48000000,
+                realisasi_april: 19000000,
+                realisasi_sd_april: 67000000
+            },
+            {
+                id: 4,
+                uraian: "Peralatan",
+                rencana_maret: 25000000,
+                rencana_april: 5000000,
+                rencana_sd_april: 30000000,
+                realisasi_maret: 25000000,
+                realisasi_april: 5000000,
+                realisasi_sd_april: 30000000
+            }
+        ];
+
+        let filteredData = [...budgetData];
+        let currentPage = 1;
+        const itemsPerPage = 10;
+        let nextId = 5;
+
+        // Format number to Rupiah
+        function formatRupiah(number) {
+            if (number === null || number === undefined || number === 0) {
+                return '-';
+            }
+            return number.toLocaleString('id-ID');
+        }
+
+        // Parse Rupiah to number
+        function parseRupiah(str) {
+            if (str === '-' || str === '' || str === null) return 0;
+            return parseFloat(str.replace(/\./g, '').replace(/,/g, ''));
+        }
+
+        // Render table
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageData = filteredData.slice(start, end);
+
+            pageData.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="text">${item.uraian}</td>
+                    <td class="number">${formatRupiah(item.rencana_maret)}</td>
+                    <td class="number">${formatRupiah(item.rencana_april)}</td>
+                    <td class="number">${formatRupiah(item.rencana_sd_april)}</td>
+                    <td class="number">${formatRupiah(item.realisasi_maret)}</td>
+                    <td class="number">${formatRupiah(item.realisasi_april)}</td>
+                    <td class="number">${formatRupiah(item.realisasi_sd_april)}</td>
+                    <td>
+                        <div class="flex gap-2 justify-center">
+                            <button onclick="editData(${item.id})" class="btn-warning text-xs py-1 px-2">
+                                Edit
+                            </button>
+                            <button onclick="deleteData(${item.id})" class="btn-danger text-xs py-1 px-2">
+                                Hapus
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            updatePagination();
+        }
+
+        // Update pagination
+        function updatePagination() {
+            const total = filteredData.length;
+            const start = total === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+            const end = Math.min(currentPage * itemsPerPage, total);
+            const totalPages = Math.ceil(total / itemsPerPage);
+
+            document.getElementById('showingFrom').textContent = start;
+            document.getElementById('showingTo').textContent = end;
+            document.getElementById('showingTotal').textContent = total;
+            document.getElementById('totalRecords').textContent = total;
+            document.getElementById('pageInfo').textContent = `Halaman ${currentPage} dari ${totalPages || 1}`;
+            document.getElementById('prevBtn').disabled = currentPage === 1;
+            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+        }
+
+        // Change page
+        function changePage(direction) {
+            const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+            const newPage = currentPage + direction;
+            if (newPage >= 1 && newPage <= totalPages) {
+                currentPage = newPage;
+                renderTable();
+            }
+        }
+
+        // Filter data
+        function filterData() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            filteredData = budgetData.filter(item => 
+                item.uraian.toLowerCase().includes(searchTerm)
+            );
+            currentPage = 1;
+            renderTable();
+        }
+
+        // Modal functions
+        function openModal() {
+            document.getElementById('modal').classList.add('active');
+            document.getElementById('modalTitle').textContent = 'Tambah Data';
+            document.getElementById('dataForm').reset();
+            document.getElementById('editId').value = '';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+
+        // Save data
+        function saveData(event) {
+            event.preventDefault();
+            
+            const editId = document.getElementById('editId').value;
+            const data = {
+                uraian: document.getElementById('uraian').value,
+                rencana_maret: parseFloat(document.getElementById('rencana_maret').value) || 0,
+                rencana_april: parseFloat(document.getElementById('rencana_april').value) || 0,
+                rencana_sd_april: parseFloat(document.getElementById('rencana_sd_april').value) || 0,
+                realisasi_maret: parseFloat(document.getElementById('realisasi_maret').value) || 0,
+                realisasi_april: parseFloat(document.getElementById('realisasi_april').value) || 0,
+                realisasi_sd_april: parseFloat(document.getElementById('realisasi_sd_april').value) || 0
+            };
+
+            if (editId) {
+                // Update existing
+                const index = budgetData.findIndex(item => item.id === parseInt(editId));
+                if (index !== -1) {
+                    budgetData[index] = { ...budgetData[index], ...data };
+                }
+            } else {
+                // Add new
+                budgetData.push({ id: nextId++, ...data });
+            }
+
+            filteredData = [...budgetData];
+            closeModal();
+            renderTable();
+        }
+
+        // Edit data
+        function editData(id) {
+            const item = budgetData.find(item => item.id === id);
+            if (item) {
+                document.getElementById('modal').classList.add('active');
+                document.getElementById('modalTitle').textContent = 'Edit Data';
+                document.getElementById('editId').value = id;
+                document.getElementById('uraian').value = item.uraian;
+                document.getElementById('rencana_maret').value = item.rencana_maret;
+                document.getElementById('rencana_april').value = item.rencana_april;
+                document.getElementById('rencana_sd_april').value = item.rencana_sd_april;
+                document.getElementById('realisasi_maret').value = item.realisasi_maret;
+                document.getElementById('realisasi_april').value = item.realisasi_april;
+                document.getElementById('realisasi_sd_april').value = item.realisasi_sd_april;
+            }
+        }
+
+        // Delete data
+        function deleteData(id) {
+            if (confirm('Yakin ingin menghapus data ini?')) {
+                budgetData = budgetData.filter(item => item.id !== id);
+                filteredData = [...budgetData];
+                renderTable();
+            }
+        }
+
+        // Handle file upload
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    // Skip header rows (assuming 2 header rows)
+                    if (jsonData.length > 2) {
+                        const newData = [];
+                        for (let i = 2; i < jsonData.length; i++) {
+                            const row = jsonData[i];
+                            if (row[0]) {
+                                newData.push({
+                                    id: nextId++,
+                                    uraian: row[0] || '',
+                                    rencana_maret: parseRupiah(row[1]) || 0,
+                                    rencana_april: parseRupiah(row[2]) || 0,
+                                    rencana_sd_april: parseRupiah(row[3]) || 0,
+                                    realisasi_maret: parseRupiah(row[4]) || 0,
+                                    realisasi_april: parseRupiah(row[5]) || 0,
+                                    realisasi_sd_april: parseRupiah(row[6]) || 0
+                                });
+                            }
+                        }
+                        budgetData = [...budgetData, ...newData];
+                        filteredData = [...budgetData];
+                        renderTable();
+                        alert(`Berhasil mengupload ${newData.length} data`);
+                    }
+                } catch (error) {
+                    alert('Gagal membaca file: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+            event.target.value = '';
+        }
+
+        // Download Excel
+        function downloadExcel() {
+            const header = [
+                ['Uraian Pekerjaan', 'Rencana (Rp)', '', '', 'Realisasi (Rp)', '', ''],
+                ['', 'sd. Maret 2026', 'Apr-26', 'sd. April 2026', 'sd. Maret 2026', 'Apr-26', 'sd. April 2026']
+            ];
+
+            const data = filteredData.map(item => [
+                item.uraian,
+                item.rencana_maret,
+                item.rencana_april,
+                item.rencana_sd_april,
+                item.realisasi_maret,
+                item.realisasi_april,
+                item.realisasi_sd_april
+            ]);
+
+            const wsData = [...header, ...data];
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            // Merge header cells
+            ws['!merges'] = [
+                { s: { r: 0, c: 1 }, e: { r: 0, c: 3 } },
+                { s: { r: 0, c: 4 }, e: { r: 0, c: 6 } }
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Anggaran Pemeliharaan');
+            XLSX.writeFile(wb, 'anggaran_pemeliharaan.xlsx');
+        }
+
+        // Initialize
+        renderTable();
+    </script>
+</body>
+</html>

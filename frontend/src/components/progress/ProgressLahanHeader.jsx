@@ -88,10 +88,10 @@ const ProgressLahanHeader = ({ onRefresh, onFullscreen, onExport, onUploadCSV })
 
           <button
             onClick={handleFullscreen}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-medium transition-all hover:scale-105 hover:shadow-lg hover:shadow-cyan-500/40"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-medium transition-all hover:scale-105 hover:shadow-lg hover:shadow-orange-500/40"
             style={{
-              background: 'linear-gradient(135deg, #06B6D4, #0891B2)',
-              boxShadow: '0 4px 16px rgba(6,182,212,0.4)',
+              background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+              boxShadow: '0 4px 16px rgba(245,158,11,0.4)',
             }}
           >
             <Maximize2 className="w-4 h-4" />

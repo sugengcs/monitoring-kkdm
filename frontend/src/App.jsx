@@ -15,6 +15,8 @@ import Karyawan from './pages/Karyawan';
 import RepairTracking from './pages/RepairTracking';
 import ProgressLahan from './pages/ProgressLahan';
 import ProgressDashboard from './pages/ProgressDashboard';
+import AnggaranPemeliharaan from './pages/AnggaranPemeliharaan';
+import MonitoringSPMWTR from './pages/MonitoringSPMWTR';
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/MainLayout';
 
@@ -43,6 +45,8 @@ function App() {
                             <Route path="/reports" element={<DamageReport />} />
                             <Route path="/karyawan" element={<Karyawan />} />
                             <Route path="/repair-tracking" element={<RepairTracking />} />
+                            <Route path="/anggaran-pemeliharaan" element={<AnggaranPemeliharaan />} />
+                            <Route path="/monitoring-spm-wtr" element={<MonitoringSPMWTR />} />
                             <Route path="/progress-lahan" element={<ProgressLahan />} />
                             <Route path="/cctv" element={<CCTVMonitoring />} />
                             <Route path="/analytics" element={<Analytics />} />

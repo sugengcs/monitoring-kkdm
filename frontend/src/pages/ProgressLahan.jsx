@@ -5,15 +5,229 @@ import KpiCardsHorizontal from '../components/progress/KpiCardsHorizontal';
 import ProgressSeksiCards from '../components/progress/ProgressSeksiCards';
 import BecakayuMap from '../components/progress/BecakayuMap';
 import ProgressDataTable from '../components/progress/ProgressDataTable';
+import GlowCard from '../components/GlowCard';
+import { AlertCircle, X, Download, FileSpreadsheet, FileText, Loader2, Edit2, Save, Plus } from 'lucide-react';
 
 const ProgressLahan = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [importFile, setImportFile] = useState(null);
-  const [editingItem, setEditingItem] = useState(null);
-  const [editForm, setEditForm] = useState({});
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [highlightedSeksi, setHighlightedSeksi] = useState(null);
+  const [showTooltip, setShowTooltip] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lahanData, setLahanData] = useState([]);
+  const [editingItem, setEditingItem] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [showDttModal, setShowDttModal] = useState(false);
+  const [dttLoading, setDttLoading] = useState(false);
+  const [editingOutstandingRow, setEditingOutstandingRow] = useState(null);
+  const [editOutstandingForm, setEditOutstandingForm] = useState({});
+  const [showEditModal, setShowEditModal] = useState(false);
+  
+  // Load Outstanding DTT data from localStorage on mount
+  const [outstandingData, setOutstandingData] = useState(() => {
+    const savedData = localStorage.getItem('outstandingDttData');
+    if (savedData) {
+      try {
+        return JSON.parse(savedData);
+      } catch (e) {
+        console.error('Error loading outstanding data from localStorage:', e);
+      }
+    }
+    // Default data
+    return [
+      {
+        id: 1,
+        no: 'A',
+        uraian: 'Nilai',
+        dtt: 15000000000,
+        cof: 12000000000,
+        si: 8000000000,
+        total: 35000000000
+      },
+      {
+        id: 2,
+        no: 'B',
+        uraian: 'Realisasi',
+        dtt: 10000000000,
+        cof: 9000000000,
+        si: 5000000000,
+        total: 24000000000
+      },
+      {
+        id: 3,
+        no: 'C',
+        uraian: 'Outstanding',
+        dtt: 5000000000,
+        cof: 3000000000,
+        si: 3000000000,
+        total: 11000000000,
+        isOutstanding: true,
+        breakdown: {
+          lman: 7000000000,
+          apbn: 4000000000
+        }
+      }
+    ];
+  });
+
+  // Manual input state for financial cards
+  const [manualFinancialData, setManualFinancialData] = useState(() => {
+    const savedData = localStorage.getItem('manualFinancialData');
+    if (savedData) {
+      try {
+        return JSON.parse(savedData);
+      } catch (e) {
+        console.error('Error loading manual financial data from localStorage:', e);
+      }
+    }
+    return {
+      realisasiDTT: 0,
+      pengembalian: 0,
+      outstandingDTT: 0,
+      estimasiCoF: 0,
+      realisasiCoF: 0,
+      outstandingCoF: 0
+    };
+  });
+
+  const [editingFinancialCard, setEditingFinancialCard] = useState(null);
+  const [financialEditForm, setFinancialEditForm] = useState({});
+
+  // Save Outstanding DTT data to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('outstandingDttData', JSON.stringify(outstandingData));
+  }, [outstandingData]);
+
+  // Save manual financial data to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('manualFinancialData', JSON.stringify(manualFinancialData));
+  }, [manualFinancialData]);
+
+  // Calculate financial summary - use manual values if provided, otherwise calculate from data
+  const realisasiDTT = manualFinancialData.realisasiDTT > 0 ? manualFinancialData.realisasiDTT : (outstandingData.find(row => row.no === 'B')?.dtt || 0);
+  const pengembalian = manualFinancialData.pengembalian > 0 ? manualFinancialData.pengembalian : (outstandingData.find(row => row.no === 'B')?.si || 0);
+  const outstandingDTT = manualFinancialData.outstandingDTT > 0 ? manualFinancialData.outstandingDTT : (realisasiDTT - pengembalian);
+  const estimasiCoF = manualFinancialData.estimasiCoF > 0 ? manualFinancialData.estimasiCoF : (outstandingData.find(row => row.no === 'A')?.cof || 0);
+  const realisasiCoF = manualFinancialData.realisasiCoF > 0 ? manualFinancialData.realisasiCoF : (outstandingData.find(row => row.no === 'B')?.cof || 0);
+  const outstandingCoF = manualFinancialData.outstandingCoF > 0 ? manualFinancialData.outstandingCoF : (estimasiCoF - realisasiCoF);
+
+  // Calculate counts from outstanding data
+  const dttTotalCount = outstandingData.length;
+  const dttProsesCount = outstandingData.filter(row => row.isOutstanding).length;
+  const dttPendingCount = 0;
+
+  // Currency formatter for Indonesian format
+  const formatCurrency = (value) => {
+    if (!value) return 'Rp 0';
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(value);
+  };
+
+  // Format number with thousand separator
+  const formatNumber = (value) => {
+    if (!value) return '0';
+    return new Intl.NumberFormat('id-ID').format(value);
+  };
+
+  // Export to Excel
+  const handleExportExcel = () => {
+    const headers = ['NO', 'URAIAN', 'DTT', 'CoF', 'SI', 'TOTAL OUTSTANDING'];
+    const rows = outstandingData.map(row => [
+      row.no,
+      row.uraian,
+      formatCurrency(row.dtt),
+      formatCurrency(row.cof),
+      formatCurrency(row.si),
+      formatCurrency(row.total)
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `outstanding_dtt_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Export to PDF (simple implementation)
+  const handleExportPDF = () => {
+    alert('Fitur export PDF akan segera tersedia');
+  };
+
+  // Outstanding DTT Edit Functions
+  const handleEditOutstandingRow = (row) => {
+    setEditingOutstandingRow(row.id);
+    setEditOutstandingForm({
+      uraian: row.uraian,
+      dtt: row.dtt,
+      cof: row.cof,
+      si: row.si,
+      breakdown: row.breakdown || { lman: 0, apbn: 0 }
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveOutstandingEdit = () => {
+    setOutstandingData(outstandingData.map(row => 
+      row.id === editingOutstandingRow 
+        ? { 
+            ...row, 
+            ...editOutstandingForm, 
+            total: editOutstandingForm.dtt + editOutstandingForm.cof + editOutstandingForm.si
+          }
+        : row
+    ));
+    setShowEditModal(false);
+    setEditingOutstandingRow(null);
+    setEditOutstandingForm({});
+  };
+
+  const handleCancelOutstandingEdit = () => {
+    setShowEditModal(false);
+    setEditingOutstandingRow(null);
+    setEditOutstandingForm({});
+  };
+
+  const handleOutstandingInputChange = (field, value) => {
+    setEditOutstandingForm({ ...editOutstandingForm, [field]: value });
+  };
+
+  // Financial card edit handlers
+  const handleEditFinancialCard = (cardKey, cardTitle) => {
+    setEditingFinancialCard({ key: cardKey, title: cardTitle });
+    setFinancialEditForm({
+      [cardKey]: manualFinancialData[cardKey] || 0
+    });
+  };
+
+  const handleSaveFinancialCard = () => {
+    const cardKey = editingFinancialCard.key;
+    const value = parseFloat(financialEditForm[cardKey]) || 0;
+    setManualFinancialData({
+      ...manualFinancialData,
+      [cardKey]: value
+    });
+    setEditingFinancialCard(null);
+    setFinancialEditForm({});
+  };
+
+  const handleCancelFinancialCard = () => {
+    setEditingFinancialCard(null);
+    setFinancialEditForm({});
+  };
 
   // Fetch data from API on mount
   useEffect(() => {
@@ -335,6 +549,35 @@ const ProgressLahan = () => {
     }
   };
 
+  const handleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.error('Error attempting to enable fullscreen:', err);
+      });
+    } else {
+      document.exitFullscreen().catch(err => {
+        console.error('Error attempting to exit fullscreen:', err);
+      });
+    }
+  };
+
+  // Listen for fullscreen changes to hide/show sidebar
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (document.fullscreenElement) {
+        document.body.classList.add('fullscreen-mode');
+      } else {
+        document.body.classList.remove('fullscreen-mode');
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.body.classList.remove('fullscreen-mode');
+    };
+  }, []);
+
   return (
     <div className="h-screen overflow-hidden" style={{ background: 'linear-gradient(135deg, #0B1120 0%, #0F172A 50%, #111827 100%)' }}>
       <div className="h-full flex flex-col p-4 lg:p-6 gap-4">
@@ -354,7 +597,7 @@ const ProgressLahan = () => {
           <>
             <ProgressLahanHeader
               onRefresh={fetchProgressLahan}
-              onFullscreen={() => {}}
+              onFullscreen={handleFullscreen}
               onExport={() => {}}
               onUploadCSV={handleCSVUpload}
             />
@@ -376,6 +619,287 @@ const ProgressLahan = () => {
               </div>
               <BecakayuMap lahanData={lahanData} />
             </div>
+
+            {/* Outstanding DTT & CoF Financial Dashboard - Premium */}
+            <GlowCard 
+              color="#3B82F6" 
+              hoverable={true} 
+              glowPosition="top"
+              className="mt-4"
+            >
+              <div className="p-4 sm:p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="p-2.5 rounded-xl transition-all duration-300 group-hover:scale-110"
+                      style={{
+                        background: 'rgba(59, 130, 246, 0.2)',
+                        backdropFilter: 'blur(10px)',
+                        boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)',
+                      }}
+                    >
+                      <AlertCircle className="w-5 h-5" style={{ color: '#3B82F6', filter: 'drop-shadow(0 0 8px #3B82F6)' }} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-bold text-white" style={{ textShadow: '0 0 20px rgba(59, 130, 246, 0.5)' }}>Outstanding DTT & CoF</h3>
+                      <p className="text-[10px] sm:text-xs text-[#94A3B8]">Dokumen Tanah Tertunda & Compensation of Fund</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {/* Card 1: Realisasi DTT */}
+                  <div 
+                    className="text-center p-3 bg-[#1E3A5F]/30 rounded-lg border border-white/10 hover:border-[#3B82F6]/50 transition-all duration-300 cursor-pointer"
+                    onClick={() => handleEditFinancialCard('realisasiDTT', 'Realisasi DTT')}
+                  >
+                    <p className="text-lg sm:text-xl font-bold text-[#3B82F6]">{formatCurrency(realisasiDTT)}</p>
+                    <p className="text-[9px] sm:text-xs text-[#94A3B8] mt-1">Realisasi DTT</p>
+                  </div>
+                  {/* Card 2: Pengembalian */}
+                  <div 
+                    className="text-center p-3 bg-[#1E3A5F]/30 rounded-lg border border-white/10 hover:border-[#10B981]/50 transition-all duration-300 cursor-pointer"
+                    onClick={() => handleEditFinancialCard('pengembalian', 'Pengembalian')}
+                  >
+                    <p className="text-lg sm:text-xl font-bold text-[#10B981]">{formatCurrency(pengembalian)}</p>
+                    <p className="text-[9px] sm:text-xs text-[#94A3B8] mt-1">Pengembalian</p>
+                  </div>
+                  {/* Card 3: Outstanding DTT */}
+                  <div 
+                    className="text-center p-3 bg-[#1E3A5F]/30 rounded-lg border border-white/10 hover:border-[#F59E0B]/50 transition-all duration-300 cursor-pointer"
+                    onClick={() => handleEditFinancialCard('outstandingDTT', 'Outstanding DTT')}
+                  >
+                    <p className="text-lg sm:text-xl font-bold text-[#F59E0B]">{formatCurrency(outstandingDTT)}</p>
+                    <p className="text-[9px] sm:text-xs text-[#94A3B8] mt-1">Outstanding DTT</p>
+                  </div>
+                  {/* Card 4: Estimasi CoF */}
+                  <div 
+                    className="text-center p-3 bg-[#1E3A5F]/30 rounded-lg border border-white/10 hover:border-[#8B5CF6]/50 transition-all duration-300 cursor-pointer"
+                    onClick={() => handleEditFinancialCard('estimasiCoF', 'Estimasi CoF')}
+                  >
+                    <p className="text-lg sm:text-xl font-bold text-[#8B5CF6]">{formatCurrency(estimasiCoF)}</p>
+                    <p className="text-[9px] sm:text-xs text-[#94A3B8] mt-1">Estimasi CoF</p>
+                  </div>
+                  {/* Card 5: Realisasi CoF */}
+                  <div 
+                    className="text-center p-3 bg-[#1E3A5F]/30 rounded-lg border border-white/10 hover:border-[#06B6D4]/50 transition-all duration-300 cursor-pointer"
+                    onClick={() => handleEditFinancialCard('realisasiCoF', 'Realisasi CoF')}
+                  >
+                    <p className="text-lg sm:text-xl font-bold text-[#06B6D4]">{formatCurrency(realisasiCoF)}</p>
+                    <p className="text-[9px] sm:text-xs text-[#94A3B8] mt-1">Realisasi CoF</p>
+                  </div>
+                  {/* Card 6: Outstanding CoF */}
+                  <div 
+                    className="text-center p-3 bg-[#1E3A5F]/30 rounded-lg border border-white/10 hover:border-[#EF4444]/50 transition-all duration-300 cursor-pointer"
+                    onClick={() => handleEditFinancialCard('outstandingCoF', 'Outstanding CoF')}
+                  >
+                    <p className="text-lg sm:text-xl font-bold text-[#EF4444]">{formatCurrency(outstandingCoF)}</p>
+                    <p className="text-[9px] sm:text-xs text-[#94A3B8] mt-1">Outstanding CoF</p>
+                  </div>
+                </div>
+              </div>
+            </GlowCard>
+
+            {/* Financial Card Edit Modal */}
+            {editingFinancialCard && (
+              <div 
+                className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+                onClick={(e) => e.target === e.currentTarget && handleCancelFinancialCard()}
+              >
+                <div 
+                  className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-md max-h-[90vh] overflow-hidden shadow-2xl"
+                  style={{
+                    boxShadow: '0 0 60px rgba(59, 130, 246, 0.3)'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Modal Header */}
+                  <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between sticky top-0 bg-[#0F172A] z-10">
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-bold text-white" style={{ textShadow: '0 0 20px rgba(59, 130, 246, 0.5)' }}>Edit {editingFinancialCard.title}</h2>
+                      <p className="text-sm text-[#94A3B8]">Input nilai manual</p>
+                    </div>
+                    <button
+                      onClick={handleCancelFinancialCard}
+                      className="p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Modal Content */}
+                  <div className="p-4 sm:p-6">
+                    <div>
+                      <label className="block text-sm font-medium text-[#94A3B8] mb-2">Nilai (Rp)</label>
+                      <input
+                        type="number"
+                        value={financialEditForm[editingFinancialCard.key] || ''}
+                        onChange={(e) => setFinancialEditForm({ ...financialEditForm, [editingFinancialCard.key]: e.target.value })}
+                        placeholder="Masukkan nilai dalam Rupiah"
+                        className="w-full px-4 py-3 bg-[#0F172A] border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-[#3B82F6]"
+                      />
+                      <p className="text-xs text-[#94A3B8] mt-2">Contoh: 10000000000</p>
+                    </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="p-4 sm:p-6 border-t border-white/10 flex gap-3">
+                    <button
+                      onClick={handleCancelFinancialCard}
+                      className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      onClick={handleSaveFinancialCard}
+                      className="flex-1 px-4 py-2 bg-[#3B82F6] hover:bg-[#3B82F6]/80 text-white rounded-lg transition-all duration-200 border border-[#3B82F6]/20"
+                    >
+                      Simpan
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* DTT Edit Modal */}
+            {showEditModal && (
+              <div 
+                className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+                onClick={(e) => e.target === e.currentTarget && setShowEditModal(false)}
+                style={{
+                  animation: 'fadeIn 0.3s ease-out'
+                }}
+              >
+                <div 
+                  className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl"
+                  style={{
+                    boxShadow: '0 0 60px rgba(59, 130, 246, 0.3)',
+                    animation: 'scaleIn 0.3s ease-out'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Modal Header */}
+                  <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between sticky top-0 bg-[#0F172A] z-10">
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-bold text-white" style={{ textShadow: '0 0 20px rgba(59, 130, 246, 0.5)' }}>Edit Outstanding DTT</h2>
+                      <p className="text-sm text-[#94A3B8]">Update nilai Outstanding</p>
+                    </div>
+                    <button
+                      onClick={handleCancelOutstandingEdit}
+                      className="p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Modal Content */}
+                  <div className="p-4 sm:p-6 overflow-y-auto max-h-[70vh]">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-[#94A3B8] mb-2">Uraian</label>
+                        <input
+                          type="text"
+                          value={editOutstandingForm.uraian}
+                          onChange={(e) => handleOutstandingInputChange('uraian', e.target.value)}
+                          className="w-full px-4 py-2 bg-[#0F172A] border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-[#3B82F6]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-[#94A3B8] mb-2">DTT (Rp)</label>
+                        <input
+                          type="text"
+                          value={editOutstandingForm.dtt}
+                          onChange={(e) => handleOutstandingInputChange('dtt', parseFloat(e.target.value.replace(/,/g, '')) || 0)}
+                          className="w-full px-4 py-2 bg-[#0F172A] border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-[#3B82F6]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-[#94A3B8] mb-2">CoF (Rp)</label>
+                        <input
+                          type="text"
+                          value={editOutstandingForm.cof}
+                          onChange={(e) => handleOutstandingInputChange('cof', parseFloat(e.target.value.replace(/,/g, '')) || 0)}
+                          className="w-full px-4 py-2 bg-[#0F172A] border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-[#3B82F6]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-[#94A3B8] mb-2">SI (Rp)</label>
+                        <input
+                          type="text"
+                          value={editOutstandingForm.si}
+                          onChange={(e) => handleOutstandingInputChange('si', parseFloat(e.target.value.replace(/,/g, '')) || 0)}
+                          className="w-full px-4 py-2 bg-[#0F172A] border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-[#3B82F6]"
+                        />
+                      </div>
+                      {editOutstandingForm.breakdown && (
+                        <>
+                          <div className="border-t border-white/10 pt-4 mt-4">
+                            <h3 className="text-sm font-semibold text-white mb-3">Breakdown Outstanding</h3>
+                            <div>
+                              <label className="block text-sm font-medium text-[#94A3B8] mb-2">LMAN (Rp)</label>
+                              <input
+                                type="text"
+                                value={editOutstandingForm.breakdown.lman}
+                                onChange={(e) => handleOutstandingInputChange('breakdown', {
+                                  ...editOutstandingForm.breakdown,
+                                  lman: parseFloat(e.target.value.replace(/,/g, '')) || 0
+                                })}
+                                className="w-full px-4 py-2 bg-[#0F172A] border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-[#3B82F6]"
+                              />
+                            </div>
+                            <div className="mt-4">
+                              <label className="block text-sm font-medium text-[#94A3B8] mb-2">APBN (Rp)</label>
+                              <input
+                                type="text"
+                                value={editOutstandingForm.breakdown.apbn}
+                                onChange={(e) => handleOutstandingInputChange('breakdown', {
+                                  ...editOutstandingForm.breakdown,
+                                  apbn: parseFloat(e.target.value.replace(/,/g, '')) || 0
+                                })}
+                                className="w-full px-4 py-2 bg-[#0F172A] border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-[#3B82F6]"
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="p-4 sm:p-6 border-t border-white/10 flex justify-end gap-3">
+                    <button
+                      onClick={handleCancelOutstandingEdit}
+                      className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      onClick={handleSaveOutstandingEdit}
+                      className="px-4 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                      <Save className="w-4 h-4" />
+                      Simpan
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <style>{`
+              @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+              }
+              @keyframes scaleIn {
+                from { 
+                  opacity: 0;
+                  transform: scale(0.95);
+                }
+                to { 
+                  opacity: 1;
+                  transform: scale(1);
+                }
+              }
+            `}</style>
           </>
         )}
       </div>

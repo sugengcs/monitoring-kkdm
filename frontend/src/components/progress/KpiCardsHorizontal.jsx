@@ -104,8 +104,8 @@ const KpiCardsHorizontal = ({ data }) => {
       <KpiCardHorizontal
         title="TOTAL KEBUTUHAN"
         value={`${totalKebutuhan} m²`}
-  subtitle=""     
-  icon={Target}
+        subtitle=""
+        icon={Target}
         color="#22C55E"
         gradient="linear-gradient(135deg, #22C55E, #16A34A)"
         delay={0}

@@ -65,6 +65,7 @@ const BecakayuMap = ({ lahanData }) => {
   const [loading, setLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [highlightedSeksi, setHighlightedSeksi] = useState(null);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   // Load layers from database on mount
   useEffect(() => {
@@ -105,14 +106,38 @@ const BecakayuMap = ({ lahanData }) => {
         center: [-6.2347, 106.9322],
         zoom: 14,
         zoomControl: false,
-        scrollWheelZoom: false,
-        doubleClickZoom: false,
-        touchZoom: false,
-        boxZoom: false,
-        keyboard: false,
-        dragging: false,
+        scrollWheelZoom: true,
+        doubleClickZoom: true,
+        touchZoom: true,
+        boxZoom: true,
+        keyboard: true,
+        dragging: true,
+        zoomAnimation: true,
+        fadeAnimation: true,
+        markerZoomAnimation: true,
       });
       mapInstanceRef.current = map;
+
+      // Enable all interactions explicitly
+      map.dragging.enable();
+      map.scrollWheelZoom.enable();
+      map.touchZoom.enable();
+      map.doubleClickZoom.enable();
+      map.boxZoom.enable();
+      map.keyboard.enable();
+
+      // Cursor grab/grabbing functionality
+      const mapContainer = mapContainerRef.current;
+      map.on('mousedown', () => {
+        mapContainer.style.cursor = 'grabbing';
+      });
+      map.on('mouseup', () => {
+        mapContainer.style.cursor = 'grab';
+      });
+      map.on('mouseout', () => {
+        mapContainer.style.cursor = 'grab';
+      });
+      mapContainer.style.cursor = 'grab';
 
       // Basemap layers
       const darkLayer = L.tileLayer(DARK_TILES, {
@@ -747,13 +772,15 @@ const BecakayuMap = ({ lahanData }) => {
 
   return (
     <div
-      className="rounded-2xl overflow-hidden flex flex-col h-full"
+      className="rounded-2xl overflow-hidden flex flex-col h-full transition-all duration-300"
       style={{
         background: 'rgba(17,24,39,0.6)',
         border: '1px solid rgba(255,255,255,0.08)',
         backdropFilter: 'blur(16px)',
         boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
       }}
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
     >
       {/* Header */}
       <div className="flex flex-col gap-3 p-4 pb-0 flex-shrink-0">
@@ -805,11 +832,33 @@ const BecakayuMap = ({ lahanData }) => {
       </div>
 
       {/* Map */}
-      <div className="relative rounded-2xl overflow-hidden flex-1 min-h-0" style={{ width: '100%', minHeight: '600px' }}>
+      <div 
+        className={`relative rounded-2xl overflow-hidden flex-1 min-h-0 transition-all duration-300 ${isFullscreen ? 'rounded-none' : ''}`}
+        style={{ 
+          width: '100%', 
+          minHeight: '600px',
+          border: showTooltip ? '2px solid rgba(59,130,246,0.6)' : '1px solid rgba(255,255,255,0.08)',
+          boxShadow: showTooltip ? '0 0 20px rgba(59,130,246,0.4), 0 8px 32px rgba(0,0,0,0.3)' : '0 8px 32px rgba(0,0,0,0.3)',
+        }}
+      >
         <div
           ref={mapContainerRef}
           style={{ width: '100%', height: '100%', background: '#0B1120' }}
         />
+
+        {/* Tooltip */}
+        {showTooltip && (
+          <div className="absolute top-3 left-1/2 transform -translate-x-1/2 px-3 py-1.5 rounded-lg text-[10px] text-white z-[1001] transition-opacity duration-300"
+            style={{
+              background: 'rgba(11,17,32,0.95)',
+              border: '1px solid rgba(59,130,246,0.4)',
+              backdropFilter: 'blur(12px)',
+              boxShadow: '0 4px 16px rgba(59,130,246,0.3)',
+            }}
+          >
+            Gunakan Ctrl + Scroll untuk zoom
+          </div>
+        )}
 
         {/* Coordinates overlay */}
         <div className="absolute bottom-3 left-3 px-2 py-1 rounded-lg text-[10px] text-slate-400"
