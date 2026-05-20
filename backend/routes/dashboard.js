@@ -15,38 +15,10 @@ router.get('/stats', auth, async (req, res) => {
     const totalAssets = db.prepare('SELECT COUNT(*) as count FROM assets').get();
     console.log('✓ Total Assets:', totalAssets.count);
 
-    // Assets by condition - using latest report AND maintenance status
+    // Assets by condition - using actual condition_status from assets table
     const assetsByCondition = db.prepare(`
-      SELECT
-        CASE
-          -- A. KONDISI BAIK: no active damage report OR latest report status = selesai
-          WHEN latest_report.status IS NULL THEN 'baik'
-          WHEN latest_report.status = 'selesai' THEN 'baik'
-          WHEN latest_report.status = 'ditolak' THEN 'baik'
-
-          -- C. DALAM PERBAIKAN / SEDANG PERBAIKAN: teknisi sudah klik Mulai, maintenance record exists, progress < 100%
-          WHEN latest_report.status IN ('diproses', 'dalam_perbaikan', 'on_progress') THEN 'sedang_diperbaiki'
-
-          -- B. KONDISI RUSAK: ada laporan baru, status menunggu, belum dimulai teknisi
-          WHEN latest_report.status = 'pending' THEN
-            CASE
-              WHEN latest_report.damage_level = 'ringan' THEN 'rusak_ringan'
-              ELSE 'rusak_berat'
-            END
-
-          -- Fallback to current asset condition
-          ELSE a.condition_status
-        END as condition_status,
-        COUNT(*) as count
-      FROM assets a
-      LEFT JOIN (
-        SELECT
-          asset_id,
-          status,
-          damage_level,
-          ROW_NUMBER() OVER (PARTITION BY asset_id ORDER BY reported_at DESC) as rn
-        FROM damage_reports
-      ) latest_report ON a.id = latest_report.asset_id AND latest_report.rn = 1
+      SELECT condition_status, COUNT(*) as count
+      FROM assets
       GROUP BY condition_status
     `).all();
 
@@ -78,6 +50,14 @@ router.get('/stats', auth, async (req, res) => {
     console.log('✓ Rusak:', totalRusak, '(ringan:', countRusakRingan, ', berat:', countRusakBerat, ')');
     console.log('✓ Sedang Perbaikan:', countSedangPerbaikan);
 
+    // Total damage reports
+    const totalReports = db.prepare('SELECT COUNT(*) as count FROM damage_reports').get();
+    console.log('✓ Total Reports:', totalReports.count);
+
+    // Reports by status
+    const reportsByStatus = db.prepare('SELECT status, COUNT(*) as count FROM damage_reports GROUP BY status').all();
+    console.log('✓ Reports by Status:', JSON.stringify(reportsByStatus, null, 2));
+
     // Selesai Perbaikan (Histori) - count of reports with status 'selesai'
     const countSelesaiHistory = (reportsByStatus.find(s => s.status === 'selesai')?.count || 0);
     console.log('✓ Selesai Perbaikan (Histori):', countSelesaiHistory);
@@ -91,14 +71,6 @@ router.get('/stats', auth, async (req, res) => {
       console.error('⚠️ DATA MISMATCH: Total assets does not equal sum of conditions!');
       console.error('   Expected:', totalAssets.count, 'Got:', calculatedTotal, 'Difference:', totalAssets.count - calculatedTotal);
     }
-
-    // Total damage reports
-    const totalReports = db.prepare('SELECT COUNT(*) as count FROM damage_reports').get();
-    console.log('✓ Total Reports:', totalReports.count);
-
-    // Reports by status
-    const reportsByStatus = db.prepare('SELECT status, COUNT(*) as count FROM damage_reports GROUP BY status').all();
-    console.log('✓ Reports by Status:', JSON.stringify(reportsByStatus, null, 2));
 
     // Maintenance progress stats
     const maintenanceStats = db.prepare('SELECT status, COUNT(*) as count FROM maintenance_progress GROUP BY status').all();
@@ -189,39 +161,11 @@ router.get('/analytics', auth, async (req, res) => {
     // Repair progress over time
     const repairProgress = db.prepare("SELECT strftime('%Y-%m', updated_at) as month, AVG(progress_percentage) as avg_progress FROM maintenance_progress WHERE updated_at >= date('now', '-12 months') GROUP BY strftime('%Y-%m', updated_at) ORDER BY month").all();
 
-    // Asset condition distribution - using same logic as stats
+    // Asset condition distribution - using actual condition_status from assets table
     const totalAssets = db.prepare('SELECT COUNT(*) as count FROM assets').get().count;
     const conditionDistribution = db.prepare(`
-      SELECT
-        CASE
-          -- A. KONDISI BAIK: no active damage report OR latest report status = selesai
-          WHEN latest_report.status IS NULL THEN 'baik'
-          WHEN latest_report.status = 'selesai' THEN 'baik'
-          WHEN latest_report.status = 'ditolak' THEN 'baik'
-
-          -- C. DALAM PERBAIKAN / SEDANG PERBAIKAN: teknisi sudah klik Mulai, maintenance record exists, progress < 100%
-          WHEN latest_report.status IN ('diproses', 'dalam_perbaikan', 'on_progress') THEN 'sedang_diperbaiki'
-
-          -- B. KONDISI RUSAK: ada laporan baru, status menunggu, belum dimulai teknisi
-          WHEN latest_report.status = 'pending' THEN
-            CASE
-              WHEN latest_report.damage_level = 'ringan' THEN 'rusak_ringan'
-              ELSE 'rusak_berat'
-            END
-
-          -- Fallback to current asset condition
-          ELSE a.condition_status
-        END as condition_status,
-        COUNT(*) as count
-      FROM assets a
-      LEFT JOIN (
-        SELECT
-          asset_id,
-          status,
-          damage_level,
-          ROW_NUMBER() OVER (PARTITION BY asset_id ORDER BY reported_at DESC) as rn
-        FROM damage_reports
-      ) latest_report ON a.id = latest_report.asset_id AND latest_report.rn = 1
+      SELECT condition_status, COUNT(*) as count
+      FROM assets
       GROUP BY condition_status
     `).all().map(item => ({
       ...item,

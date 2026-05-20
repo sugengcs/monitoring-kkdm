@@ -426,12 +426,12 @@ const Dashboard = () => {
     fetchAssets();
     fetchReports();
 
-    // Poll for realtime updates every 5 seconds
+    // Poll for realtime updates every 2 seconds (faster sync)
     const interval = setInterval(() => {
       fetchStats();
       fetchAssets();
       fetchReports();
-    }, 5000);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [selectedMonth, selectedWeek, selectedYear]);
@@ -547,7 +547,9 @@ const Dashboard = () => {
   const fetchStats = async () => {
     try {
       console.log('[Dashboard] Fetching stats...');
-      const response = await api.get('/dashboard/stats');
+      const response = await api.get('/dashboard/stats', {
+        params: { _t: Date.now() }
+      });
       console.log('[Dashboard] API Response:', response.data);
       const statsData = response.data.data;
       console.log('[Dashboard] Stats Data:', JSON.stringify(statsData, null, 2));
@@ -581,7 +583,7 @@ const Dashboard = () => {
 
   const fetchAssets = async () => {
     try {
-      const response = await api.get('/assets', { params: { month: selectedMonth, year: selectedYear || '', limit: 9999 } });
+      const response = await api.get('/assets', { params: { month: selectedMonth, year: selectedYear || '', limit: 9999, _t: Date.now() } });
       let data = response.data.data || [];
       // Apply week-of-month filter client-side (Minggu 1 = tanggal 1-7, dst)
       if (selectedWeek) {
@@ -601,7 +603,7 @@ const Dashboard = () => {
 
   const fetchReports = async () => {
     try {
-      const response = await api.get('/reports', { params: { limit: 20 } });
+      const response = await api.get('/reports', { params: { limit: 20, _t: Date.now() } });
       setReports(response.data.data || []);
     } catch (error) {
       console.error('Error fetching reports:', error);
@@ -954,7 +956,7 @@ const Dashboard = () => {
           />
           <StatCard
             title="Dalam Perbaikan"
-            value={filteredStats.dalam_perbaikan}
+            value={filteredStats.sedangPerbaikan}
             icon={Wrench}
             color="#F59E0B"
             gradient="gradient-warning"
