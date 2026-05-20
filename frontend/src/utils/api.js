@@ -16,8 +16,9 @@ const api = axios.create({
   baseURL: resolvedBase,
   headers: {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
+    'Expires': '0',
   },
 });
 
@@ -25,6 +26,17 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+
+    // FORCE realtime request
+    config.params = {
+      ...config.params,
+      _t: Date.now(),
+    };
+
+    // Anti cache
+    config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+    config.headers['Pragma'] = 'no-cache';
+    config.headers['Expires'] = '0';
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
