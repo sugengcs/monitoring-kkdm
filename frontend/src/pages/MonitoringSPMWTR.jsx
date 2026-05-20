@@ -1374,13 +1374,6 @@ const MonitoringSPMWTR = () => {
 
     // Fetch data from API on mount
     fetchMonitoringSPMData();
-
-    // Poll for real-time updates every 3 seconds
-    const interval = setInterval(() => {
-      fetchMonitoringSPMData();
-    }, 3000);
-
-    return () => clearInterval(interval);
   }, []);
 
   // Fetch data from API

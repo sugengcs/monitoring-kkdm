@@ -86,12 +86,6 @@ const RepairTracking = () => {
     if (user?.role === 'admin') fetchTeknisi();
   }, [fetchReports, fetchTeknisi, user?.role]);
 
-  // Polling every 30 seconds
-  useEffect(() => {
-    pollRef.current = setInterval(fetchReports, 30000);
-    return () => clearInterval(pollRef.current);
-  }, [fetchReports]);
-
   // Refresh on tab visibility
   useEffect(() => {
     const handle = () => { if (document.visibilityState === 'visible') fetchReports(); };

@@ -283,14 +283,6 @@ const MonitoringMap = () => {
     fetchAssets();
   }, [fetchAssets]);
 
-  // Start polling after initial load
-  useEffect(() => {
-    pollIntervalRef.current = setInterval(pollConditions, 30000);
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
-  }, [pollConditions]);
-
   // Refresh on page visibility change (user returns to tab)
   useEffect(() => {
     const handleVisibility = () => {

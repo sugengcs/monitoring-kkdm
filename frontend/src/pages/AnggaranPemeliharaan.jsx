@@ -397,13 +397,6 @@ const AnggaranPemeliharaan = () => {
 
   useEffect(() => {
     fetchData();
-
-    // Poll for real-time updates every 3 seconds
-    const interval = setInterval(() => {
-      fetchData();
-    }, 3000);
-
-    return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {

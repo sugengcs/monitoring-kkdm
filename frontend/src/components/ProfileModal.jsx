@@ -40,7 +40,12 @@ const ProfileModal = ({ isOpen, onClose, user }) => {
       });
       
       alert('Foto profil berhasil diupload');
-      window.location.reload();
+      // Close modal and trigger profile update instead of page reload
+      onClose();
+      // Optionally trigger a profile update callback if provided
+      if (onProfileUpdate) {
+        onProfileUpdate();
+      }
     } catch (error) {
       console.error('Error uploading photo:', error);
       setError('Gagal mengupload foto profil');

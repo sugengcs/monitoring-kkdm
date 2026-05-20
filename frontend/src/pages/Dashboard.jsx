@@ -444,15 +444,6 @@ const Dashboard = () => {
     fetchStats();
     fetchAssets();
     fetchReports();
-
-    // Poll for realtime updates every 30 seconds (reduced from 2 seconds to prevent excessive calls)
-    const interval = setInterval(() => {
-      fetchStats();
-      fetchAssets();
-      fetchReports();
-    }, 30000);
-
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

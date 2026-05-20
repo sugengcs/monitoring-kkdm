@@ -452,16 +452,9 @@ const ProgressLahan = () => {
     setShowDeleteConfirm(null);
   };
 
-  // Fetch data from API on mount and poll for real-time updates
+  // Fetch data from API on mount
   useEffect(() => {
     fetchProgressLahan();
-
-    // Poll for real-time updates every 3 seconds
-    const interval = setInterval(() => {
-      fetchProgressLahan();
-    }, 3000);
-
-    return () => clearInterval(interval);
   }, []);
 
   const fetchProgressLahan = async () => {

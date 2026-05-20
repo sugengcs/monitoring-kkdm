@@ -51,6 +51,3 @@ database/*.db
 *.tmp
 *.temp
 .cache
-
-*.db-wal
-*.db-shm

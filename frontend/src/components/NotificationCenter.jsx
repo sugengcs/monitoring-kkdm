@@ -68,11 +68,6 @@ const NotificationCenter = ({ isOpen: controlledIsOpen, onClose: controlledOnClo
 
   useEffect(() => {
     fetchNotifications();
-    // Only poll if not using controlled reports
-    if (!controlledReports) {
-      const interval = setInterval(fetchNotifications, 30000);
-      return () => clearInterval(interval);
-    }
   }, [controlledReports]);
 
   useEffect(() => {
