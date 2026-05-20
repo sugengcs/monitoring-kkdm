@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useResponsive } from '../utils/responsive';
 import { motion } from 'framer-motion';
 import * as XLSX from 'xlsx';
-import { 
-  Search, 
-  Bell, 
-  User, 
+import {
+  Search,
+  Bell,
+  User,
   ChevronDown,
   AlertTriangle,
   Wrench,
@@ -20,8 +21,11 @@ import {
   FileDown,
   Trash2,
   FileSpreadsheet,
-  FileText
+  FileText,
+  Clipboard,
+  Loader2
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 // Initial data constant - defined outside component to prevent recreation on render
 const INITIAL_TABLE_DATA = [
@@ -108,6 +112,7 @@ const INITIAL_TABLE_DATA = [
 ];
 
 const MonitoringSPMWTR = () => {
+  const { isMobile, isTablet } = useResponsive();
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -166,6 +171,8 @@ const MonitoringSPMWTR = () => {
   const [newEditJalur, setNewEditJalur] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [excelImportFile, setExcelImportFile] = useState(null);
+  const [pastingPhoto, setPastingPhoto] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(null);
   
   // Group management state
   const [groups, setGroups] = useState(() => {
@@ -352,6 +359,7 @@ const MonitoringSPMWTR = () => {
     try {
       localStorage.setItem('monitoringSPMData', JSON.stringify(newData));
       console.log('Data saved to localStorage successfully');
+      syncDataToAPI();
     } catch (error) {
       console.error('Error saving data to localStorage:', error);
     }
@@ -911,6 +919,7 @@ const MonitoringSPMWTR = () => {
           try {
             localStorage.setItem('monitoringSPMData', JSON.stringify(newData));
             console.log('Data saved to localStorage successfully after import');
+            syncDataToAPI();
           } catch (error) {
             console.error('Error saving data to localStorage after import:', error);
           }
@@ -1007,6 +1016,7 @@ const MonitoringSPMWTR = () => {
       try {
         localStorage.setItem('monitoringSPMData', JSON.stringify(newData));
         console.log('Data saved to localStorage successfully after edit');
+        syncDataToAPI();
       } catch (error) {
         console.error('Error saving data to localStorage after edit:', error);
       }
@@ -1023,26 +1033,228 @@ const MonitoringSPMWTR = () => {
     input.onchange = (e) => {
       const file = e.target.files[0];
       if (file) {
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error('Ukuran file terlalu besar. Maksimal 5MB.');
+          return;
+        }
+        setUploadingPhoto(`${itemId}-${field}`);
         const reader = new FileReader();
         reader.onload = (event) => {
           setTableData(prevData => {
-            const newData = prevData.map(item => 
+            const newData = prevData.map(item =>
               item.id === itemId ? { ...item, [field]: event.target.result } : item
             );
-            // Persist to localStorage
-            try {
-              localStorage.setItem('monitoringSPMData', JSON.stringify(newData));
-              console.log('Data saved to localStorage successfully after upload');
-            } catch (error) {
-              console.error('Error saving data to localStorage after upload:', error);
-            }
+            localStorage.setItem('monitoringSPMData', JSON.stringify(newData));
             return newData;
           });
+          setUploadingPhoto(null);
+          toast.success('Foto berhasil diupload');
+          syncDataToAPI();
         };
         reader.readAsDataURL(file);
       }
     };
     input.click();
+  };
+
+  // Clipboard paste handler for table rows
+  const handlePaste = async (itemId, field, event) => {
+    event.preventDefault();
+    
+    // Create a temporary input to capture paste event
+    const tempInput = document.createElement('input');
+    tempInput.type = 'text';
+    tempInput.style.position = 'absolute';
+    tempInput.style.left = '-9999px';
+    document.body.appendChild(tempInput);
+    tempInput.focus();
+    
+    toast('Tekan Ctrl+V untuk paste gambar dari clipboard', { duration: 5000 });
+    
+    const handlePasteEvent = async (pasteEvent) => {
+      pasteEvent.preventDefault();
+      const items = pasteEvent.clipboardData?.items;
+      
+      if (!items) {
+        toast.error('Tidak ada data di clipboard');
+        cleanup();
+        return;
+      }
+      
+      let imageFile = null;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          imageFile = item.getAsFile();
+          break;
+        }
+      }
+      
+      if (!imageFile) {
+        toast.error('Tidak ada gambar di clipboard. Silakan copy gambar terlebih dahulu.');
+        cleanup();
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (imageFile.size > 5 * 1024 * 1024) {
+        toast.error('Ukuran gambar terlalu besar. Maksimal 5MB.');
+        cleanup();
+        return;
+      }
+      
+      setUploadingPhoto(`${itemId}-${field}`);
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        setTableData(prevData => {
+          const newData = prevData.map(item =>
+            item.id === itemId ? { ...item, [field]: loadEvent.target.result } : item
+          );
+          localStorage.setItem('monitoringSPMData', JSON.stringify(newData));
+          return newData;
+        });
+        setUploadingPhoto(null);
+        toast.success('Foto berhasil dipaste dari clipboard');
+        cleanup();
+        syncDataToAPI();
+      };
+      reader.readAsDataURL(imageFile);
+    };
+    
+    const cleanup = () => {
+      document.removeEventListener('paste', handlePasteEvent);
+      document.body.removeChild(tempInput);
+    };
+    
+    document.addEventListener('paste', handlePasteEvent, { once: true });
+  };
+
+  // Add modal paste handler
+  const handleAddModalPaste = async (field, event) => {
+    event.preventDefault();
+    
+    // Create a temporary input to capture paste event
+    const tempInput = document.createElement('input');
+    tempInput.type = 'text';
+    tempInput.style.position = 'absolute';
+    tempInput.style.left = '-9999px';
+    document.body.appendChild(tempInput);
+    tempInput.focus();
+    
+    toast('Tekan Ctrl+V untuk paste gambar dari clipboard', { duration: 5000 });
+    
+    const handlePasteEvent = async (pasteEvent) => {
+      pasteEvent.preventDefault();
+      const items = pasteEvent.clipboardData?.items;
+      
+      if (!items) {
+        toast.error('Tidak ada data di clipboard');
+        cleanup();
+        return;
+      }
+      
+      let imageFile = null;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          imageFile = item.getAsFile();
+          break;
+        }
+      }
+      
+      if (!imageFile) {
+        toast.error('Tidak ada gambar di clipboard. Silakan copy gambar terlebih dahulu.');
+        cleanup();
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (imageFile.size > 5 * 1024 * 1024) {
+        toast.error('Ukuran gambar terlalu besar. Maksimal 5MB.');
+        cleanup();
+        return;
+      }
+      
+      setPastingPhoto(field);
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        setAddFormData({ ...addFormData, [field]: loadEvent.target.result });
+        setPastingPhoto(null);
+        toast.success('Foto berhasil dipaste dari clipboard');
+        cleanup();
+      };
+      reader.readAsDataURL(imageFile);
+    };
+    
+    const cleanup = () => {
+      document.removeEventListener('paste', handlePasteEvent);
+      document.body.removeChild(tempInput);
+    };
+    
+    document.addEventListener('paste', handlePasteEvent, { once: true });
+  };
+
+  // Edit modal paste handler
+  const handleEditModalPaste = async (field, event) => {
+    event.preventDefault();
+    
+    // Create a temporary input to capture paste event
+    const tempInput = document.createElement('input');
+    tempInput.type = 'text';
+    tempInput.style.position = 'absolute';
+    tempInput.style.left = '-9999px';
+    document.body.appendChild(tempInput);
+    tempInput.focus();
+    
+    toast('Tekan Ctrl+V untuk paste gambar dari clipboard', { duration: 5000 });
+    
+    const handlePasteEvent = async (pasteEvent) => {
+      pasteEvent.preventDefault();
+      const items = pasteEvent.clipboardData?.items;
+      
+      if (!items) {
+        toast.error('Tidak ada data di clipboard');
+        cleanup();
+        return;
+      }
+      
+      let imageFile = null;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          imageFile = item.getAsFile();
+          break;
+        }
+      }
+      
+      if (!imageFile) {
+        toast.error('Tidak ada gambar di clipboard. Silakan copy gambar terlebih dahulu.');
+        cleanup();
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (imageFile.size > 5 * 1024 * 1024) {
+        toast.error('Ukuran gambar terlalu besar. Maksimal 5MB.');
+        cleanup();
+        return;
+      }
+      
+      setPastingPhoto(field);
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        setEditFormData({ ...editFormData, [field]: loadEvent.target.result });
+        setPastingPhoto(null);
+        toast.success('Foto berhasil dipaste dari clipboard');
+        cleanup();
+      };
+      reader.readAsDataURL(imageFile);
+    };
+    
+    const cleanup = () => {
+      document.removeEventListener('paste', handlePasteEvent);
+      document.body.removeChild(tempInput);
+    };
+    
+    document.addEventListener('paste', handlePasteEvent, { once: true });
   };
 
   const handleDownloadPhoto = (url, filename) => {
@@ -1074,6 +1286,7 @@ const MonitoringSPMWTR = () => {
       try {
         localStorage.setItem('monitoringSPMCategories', JSON.stringify(newCategories));
         console.log('Categories saved to localStorage successfully');
+        syncDataToAPI();
       } catch (error) {
         console.error('Error saving categories to localStorage:', error);
       }
@@ -1091,6 +1304,7 @@ const MonitoringSPMWTR = () => {
       try {
         localStorage.setItem('monitoringSPMCategories', JSON.stringify(newCategories));
         console.log('Categories saved to localStorage successfully after edit');
+        syncDataToAPI();
       } catch (error) {
         console.error('Error saving categories to localStorage after edit:', error);
       }
@@ -1108,6 +1322,7 @@ const MonitoringSPMWTR = () => {
       try {
         localStorage.setItem('monitoringSPMJalurOptions', JSON.stringify(newJalurOptions));
         console.log('Jalur options saved to localStorage successfully');
+        syncDataToAPI();
       } catch (error) {
         console.error('Error saving jalur options to localStorage:', error);
       }
@@ -1125,6 +1340,7 @@ const MonitoringSPMWTR = () => {
       try {
         localStorage.setItem('monitoringSPMJalurOptions', JSON.stringify(newJalurOptions));
         console.log('Jalur options saved to localStorage successfully after edit');
+        syncDataToAPI();
       } catch (error) {
         console.error('Error saving jalur options to localStorage after edit:', error);
       }
@@ -1142,6 +1358,7 @@ const MonitoringSPMWTR = () => {
         try {
           localStorage.setItem('monitoringSPMData', JSON.stringify(newData));
           console.log('Data saved to localStorage successfully after delete');
+          syncDataToAPI();
         } catch (error) {
           console.error('Error saving data to localStorage after delete:', error);
         }
@@ -1154,12 +1371,51 @@ const MonitoringSPMWTR = () => {
     setTimeout(() => {
       setLoading(false);
     }, 1000);
+
+    // Fetch data from API on mount
+    fetchMonitoringSPMData();
+
+    // Poll for real-time updates every 3 seconds
+    const interval = setInterval(() => {
+      fetchMonitoringSPMData();
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, []);
+
+  // Fetch data from API
+  const fetchMonitoringSPMData = async () => {
+    try {
+      const response = await api.get('/monitoring-spm');
+      if (response.data.success) {
+        setTableData(response.data.data);
+        localStorage.setItem('monitoringSPMData', JSON.stringify(response.data.data));
+      }
+    } catch (error) {
+      console.error('Error fetching Monitoring SPM data:', error);
+      // If API fails, use localStorage as fallback
+    }
+  };
+
+  // Sync data to API when localStorage changes
+  const syncDataToAPI = async () => {
+    try {
+      await api.post('/monitoring-spm/sync', {
+        data: tableData,
+        categories: categories,
+        jalurOptions: jalurOptions,
+        groups: groups
+      });
+    } catch (error) {
+      console.error('Error syncing Monitoring SPM data to API:', error);
+    }
+  };
 
   // Persist groups to localStorage
   useEffect(() => {
     try {
       localStorage.setItem('monitoringSPMGroups', JSON.stringify(groups));
+      syncDataToAPI();
     } catch (error) {
       console.error('Error saving groups to localStorage:', error);
     }
@@ -1293,35 +1549,46 @@ const MonitoringSPMWTR = () => {
 
   return (
     <div className="min-h-screen overflow-y-auto" style={{ background: 'linear-gradient(135deg, #0B1120 0%, #0F172A 50%, #111827 100%)' }}>
-      <div className="flex flex-col p-4 lg:p-6 gap-4">
+      <div className={`flex flex-col ${isMobile ? 'p-2' : 'p-4 lg:p-6'} gap-${isMobile ? '2' : '4'}`}>
         {/* Header */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="glass-card p-6 rounded-2xl"
+          className={`glass-card ${isMobile ? 'p-2' : 'p-6'} rounded-2xl`}
         >
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">Monitoring SPM Jalan Tol</h1>
-              <p className="text-[#94A3B8] text-sm">Monitoring Temuan dan Status Perbaikan</p>
-            </div>
-            <div className="flex gap-3">
-              <button className="flex items-center gap-2 px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-all duration-200 border border-[#3B82F6]/20">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 lg:gap-4">
+            {/* Title - Minimized on mobile */}
+            {!isMobile && (
+              <div>
+                <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">Monitoring SPM Jalan Tol</h1>
+                <p className="text-[#94A3B8] text-sm">Monitoring Temuan dan Status Perbaikan</p>
+              </div>
+            )}
+
+            {/* Mobile: Just show icon */}
+            {isMobile && (
+              <div className="flex items-center gap-2">
+                <Search className="w-5 h-5 text-blue-500" />
+              </div>
+            )}
+
+            <div className="flex gap-2 lg:gap-3">
+              <button className={`${isMobile ? 'p-2' : 'flex items-center gap-2 px-4 py-2'} bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-all duration-200 border border-[#3B82F6]/20`}>
                 <RefreshCw className="w-4 h-4" />
-                <span className="text-sm font-medium">Refresh</span>
+                {!isMobile && <span className="text-sm font-medium">Refresh</span>}
               </button>
-              <button onClick={handleExportPDF} className="flex items-center gap-2 px-4 py-2 bg-[#EF4444]/10 hover:bg-[#EF4444]/20 text-[#EF4444] rounded-lg transition-all duration-200 border border-[#EF4444]/20">
+              <button onClick={handleExportPDF} className={`${isMobile ? 'p-2' : 'flex items-center gap-2 px-4 py-2'} bg-[#EF4444]/10 hover:bg-[#EF4444]/20 text-[#EF4444] rounded-lg transition-all duration-200 border border-[#EF4444]/20`}>
                 <Download className="w-4 h-4" />
-                <span className="text-sm font-medium">Export PDF</span>
+                {!isMobile && <span className="text-sm font-medium">Export PDF</span>}
               </button>
-              <button onClick={handleExportExcelSPM} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors">
+              <button onClick={handleExportExcelSPM} className={`${isMobile ? 'p-2' : 'flex items-center gap-2 px-4 py-2'} bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors`}>
                 <FileSpreadsheet className="w-4 h-4" />
-                <span className="text-sm font-medium">Export Excel</span>
+                {!isMobile && <span className="text-sm font-medium">Export Excel</span>}
               </button>
-              <button onClick={handleDownloadTemplateSPM} className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors">
+              <button onClick={handleDownloadTemplateSPM} className={`${isMobile ? 'p-2' : 'flex items-center gap-2 px-4 py-2'} bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors`}>
                 <FileText className="w-4 h-4" />
-                <span className="text-sm font-medium">Download Template</span>
+                {!isMobile && <span className="text-sm font-medium">Download Template</span>}
               </button>
               <button 
                 onClick={() => {
@@ -1337,10 +1604,10 @@ const MonitoringSPMWTR = () => {
                   };
                   input.click();
                 }}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+                className={`${isMobile ? 'p-2' : 'flex items-center gap-2 px-4 py-2'} bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors`}
               >
                 <FileSpreadsheet className="w-4 h-4" />
-                <span className="text-sm font-medium">{excelImportFile ? excelImportFile.name : 'Import Excel'}</span>
+                {!isMobile && <span className="text-sm font-medium">{excelImportFile ? excelImportFile.name : 'Import Excel'}</span>}
               </button>
               {excelImportFile && (
                 <button
@@ -1363,7 +1630,7 @@ const MonitoringSPMWTR = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+          className={`grid grid-cols-1 sm:grid-cols-2 ${isMobile ? 'grid-cols-2' : 'lg:grid-cols-4'} gap-${isMobile ? '2' : '4'}`}
         >
           {/* Card 1: Total Temuan */}
           <motion.div
@@ -1631,10 +1898,19 @@ const MonitoringSPMWTR = () => {
                           <div className="flex gap-1">
                             <button
                               onClick={() => handleRowUpload(item.id, 'foto')}
-                              className="p-1 text-[#94A3B8] hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded transition-colors"
+                              disabled={uploadingPhoto === `${item.id}-foto`}
+                              className="p-1 text-[#94A3B8] hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Upload Foto"
                             >
-                              <Upload className="w-3 h-3" />
+                              {uploadingPhoto === `${item.id}-foto` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                            </button>
+                            <button
+                              onClick={(e) => handlePaste(item.id, 'foto', e)}
+                              disabled={uploadingPhoto === `${item.id}-foto`}
+                              className="p-1 text-[#94A3B8] hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Paste Foto dari Clipboard"
+                            >
+                              {uploadingPhoto === `${item.id}-foto` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clipboard className="w-3 h-3" />}
                             </button>
                             {item.foto && (
                               <button
@@ -1674,10 +1950,19 @@ const MonitoringSPMWTR = () => {
                           <div className="flex gap-1">
                             <button
                               onClick={() => handleRowUpload(item.id, 'fotoTindakLanjut')}
-                              className="p-1 text-[#94A3B8] hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded transition-colors"
+                              disabled={uploadingPhoto === `${item.id}-fotoTindakLanjut`}
+                              className="p-1 text-[#94A3B8] hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Upload Foto Tindak Lanjut"
                             >
-                              <Upload className="w-3 h-3" />
+                              {uploadingPhoto === `${item.id}-fotoTindakLanjut` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                            </button>
+                            <button
+                              onClick={(e) => handlePaste(item.id, 'fotoTindakLanjut', e)}
+                              disabled={uploadingPhoto === `${item.id}-fotoTindakLanjut`}
+                              className="p-1 text-[#94A3B8] hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Paste Foto Tindak Lanjut dari Clipboard"
+                            >
+                              {uploadingPhoto === `${item.id}-fotoTindakLanjut` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clipboard className="w-3 h-3" />}
                             </button>
                             {item.fotoTindakLanjut && (
                               <button
@@ -1899,6 +2184,15 @@ const MonitoringSPMWTR = () => {
                     >
                       Upload Foto
                     </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleAddModalPaste('foto', e)}
+                      disabled={pastingPhoto === 'foto'}
+                      className="px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-colors border border-[#3B82F6]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Paste Foto dari Clipboard (Ctrl+V)"
+                    >
+                      {pastingPhoto === 'foto' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clipboard className="w-4 h-4" />}
+                    </button>
                     {addFormData.foto && (
                       <button
                         type="button"
@@ -1955,6 +2249,15 @@ const MonitoringSPMWTR = () => {
                       className="flex-1 px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-colors border border-[#3B82F6]/20"
                     >
                       Upload Foto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleAddModalPaste('fotoTindakLanjut', e)}
+                      disabled={pastingPhoto === 'fotoTindakLanjut'}
+                      className="px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-colors border border-[#3B82F6]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Paste Foto Tindak Lanjut dari Clipboard (Ctrl+V)"
+                    >
+                      {pastingPhoto === 'fotoTindakLanjut' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clipboard className="w-4 h-4" />}
                     </button>
                     {addFormData.fotoTindakLanjut && (
                       <button
@@ -2175,13 +2478,24 @@ const MonitoringSPMWTR = () => {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => handleEditImageUpload('foto')}
-                      className="px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-colors flex items-center gap-2"
-                    >
-                      <Upload className="w-4 h-4" />
-                      Upload Foto
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEditImageUpload('foto')}
+                        className="px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <Upload className="w-4 h-4" />
+                        Upload Foto
+                      </button>
+                      <button
+                        onClick={(e) => handleEditModalPaste('foto', e)}
+                        disabled={pastingPhoto === 'foto'}
+                        className="px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Paste Foto dari Clipboard (Ctrl+V)"
+                      >
+                        {pastingPhoto === 'foto' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clipboard className="w-4 h-4" />}
+                        Paste
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -2239,13 +2553,24 @@ const MonitoringSPMWTR = () => {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => handleEditImageUpload('fotoTindakLanjut')}
-                      className="px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-colors flex items-center gap-2"
-                    >
-                      <Upload className="w-4 h-4" />
-                      Upload Foto TL
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEditImageUpload('fotoTindakLanjut')}
+                        className="px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <Upload className="w-4 h-4" />
+                        Upload Foto TL
+                      </button>
+                      <button
+                        onClick={(e) => handleEditModalPaste('fotoTindakLanjut', e)}
+                        disabled={pastingPhoto === 'fotoTindakLanjut'}
+                        className="px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Paste Foto Tindak Lanjut dari Clipboard (Ctrl+V)"
+                      >
+                        {pastingPhoto === 'fotoTindakLanjut' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clipboard className="w-4 h-4" />}
+                        Paste
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

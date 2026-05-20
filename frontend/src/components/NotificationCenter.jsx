@@ -4,8 +4,8 @@ import { Bell, X, AlertTriangle, CheckCircle, Clock, ExternalLink } from 'lucide
 import api from '../utils/api';
 import toast from 'react-hot-toast';
 
-const NotificationCenter = () => {
-  const [isOpen, setIsOpen] = useState(false);
+const NotificationCenter = ({ isOpen: controlledIsOpen, onClose: controlledOnClose, reports: controlledReports }) => {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -14,39 +14,51 @@ const NotificationCenter = () => {
   const buttonRef = useRef(null);
   const lastReportIdRef = useRef(null);
 
+  // Use controlled or internal state based on props
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
+  const setIsOpen = controlledOnClose ? (value) => {
+    if (!value) controlledOnClose();
+  } : setInternalIsOpen;
+
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/reports', { params: { limit: 20 } });
-      const reports = response.data.data || [];
-      
-      // Check for new reports
-      if (reports.length > 0) {
-        const latestId = reports[0].id;
-        if (lastReportIdRef.current && lastReportIdRef.current !== latestId) {
-          // New report detected
-          const newReport = reports[0];
-          toast.custom((t) => (
-            <div className={`bg-gray-800 border border-gray-700 rounded-lg p-4 shadow-xl flex items-start gap-3 transform transition-all duration-300 ${t.visible ? 'translate-x-0' : 'translate-x-full'}`}>
-              <div className="p-2 bg-orange-500/20 rounded-lg">
-                <Bell className="w-5 h-5 text-orange-500" />
+      // Use controlled reports if provided, otherwise fetch from API
+      if (controlledReports) {
+        setNotifications(controlledReports);
+        setUnreadCount(controlledReports.filter(r => !r.is_read).length);
+      } else {
+        const response = await api.get('/reports', { params: { limit: 20 } });
+        const reports = response.data.data || [];
+        
+        // Check for new reports
+        if (reports.length > 0) {
+          const latestId = reports[0].id;
+          if (lastReportIdRef.current && lastReportIdRef.current !== latestId) {
+            // New report detected
+            const newReport = reports[0];
+            toast.custom((t) => (
+              <div className={`bg-gray-800 border border-gray-700 rounded-lg p-4 shadow-xl flex items-start gap-3 transform transition-all duration-300 ${t.visible ? 'translate-x-0' : 'translate-x-full'}`}>
+                <div className="p-2 bg-orange-500/20 rounded-lg">
+                  <Bell className="w-5 h-5 text-orange-500" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-white font-medium text-sm">Laporan baru diterima</p>
+                  <p className="text-gray-400 text-xs mt-1">{newReport.description?.substring(0, 50)}...</p>
+                  <p className="text-gray-500 text-xs mt-1">{new Date(newReport.reported_at).toLocaleTimeString('id-ID')}</p>
+                </div>
+                <button onClick={() => toast.dismiss(t.id)} className="text-gray-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <div className="flex-1">
-                <p className="text-white font-medium text-sm">Laporan baru diterima</p>
-                <p className="text-gray-400 text-xs mt-1">{newReport.description?.substring(0, 50)}...</p>
-                <p className="text-gray-500 text-xs mt-1">{new Date(newReport.reported_at).toLocaleTimeString('id-ID')}</p>
-              </div>
-              <button onClick={() => toast.dismiss(t.id)} className="text-gray-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ), { duration: 5000, position: 'top-right' });
+            ), { duration: 5000, position: 'top-right' });
+          }
+          lastReportIdRef.current = latestId;
         }
-        lastReportIdRef.current = latestId;
-      }
 
-      setNotifications(reports);
-      setUnreadCount(reports.filter(r => !r.is_read).length);
+        setNotifications(reports);
+        setUnreadCount(reports.filter(r => !r.is_read).length);
+      }
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -56,10 +68,12 @@ const NotificationCenter = () => {
 
   useEffect(() => {
     fetchNotifications();
-    // Poll every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    // Only poll if not using controlled reports
+    if (!controlledReports) {
+      const interval = setInterval(fetchNotifications, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [controlledReports]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -70,6 +84,27 @@ const NotificationCenter = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Set dropdown position when controlled and opening
+  useEffect(() => {
+    if (controlledIsOpen !== undefined && controlledIsOpen) {
+      // Find the notification button in the dashboard
+      const notificationButton = document.querySelector('[data-notification-button="true"]');
+      if (notificationButton) {
+        const rect = notificationButton.getBoundingClientRect();
+        setButtonPosition({
+          top: rect.bottom + window.scrollY + 8,
+          left: rect.right + window.scrollX - 350
+        });
+      } else {
+        // Fallback position if button not found
+        setButtonPosition({
+          top: 80,
+          left: window.innerWidth - 400
+        });
+      }
+    }
+  }, [controlledIsOpen]);
 
   const markAsRead = async (reportId) => {
     try {
@@ -116,31 +151,37 @@ const NotificationCenter = () => {
   };
 
   const handleButtonClick = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setButtonPosition({
-        top: rect.bottom + window.scrollY,
-        left: rect.right + window.scrollX - 380
-      });
+    // Only handle button click if not controlled
+    if (controlledIsOpen === undefined) {
+      if (!isOpen && buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        setButtonPosition({
+          top: rect.bottom + window.scrollY,
+          left: rect.right + window.scrollX - 380
+        });
+      }
+      setIsOpen(!isOpen);
     }
-    setIsOpen(!isOpen);
   };
 
   return (
     <>
-      <div className="relative" ref={buttonRef}>
-        <button
-          onClick={handleButtonClick}
-          className="p-2 rounded-lg hover:bg-gray-700 transition-colors relative"
-        >
-          <Bell className={`w-5 h-5 text-gray-300 ${unreadCount > 0 ? 'animate-pulse' : ''}`} />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full text-white text-xs font-bold flex items-center justify-center animate-pulse">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </button>
-      </div>
+      {/* Only render button if not controlled */}
+      {controlledIsOpen === undefined && (
+        <div className="relative" ref={buttonRef}>
+          <button
+            onClick={handleButtonClick}
+            className="p-2 rounded-lg hover:bg-gray-700 transition-colors relative"
+          >
+            <Bell className={`w-5 h-5 text-gray-300 ${unreadCount > 0 ? 'animate-pulse' : ''}`} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full text-white text-xs font-bold flex items-center justify-center animate-pulse">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
 
       {isOpen && createPortal(
         <div 

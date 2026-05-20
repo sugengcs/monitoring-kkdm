@@ -21,7 +21,7 @@ const menuItems = [
   { label: 'Monitoring SHMS', icon: Activity, path: '/monitoring-shms' },
   { label: 'Data Aset', icon: Database, path: '/assets' },
   { label: 'Pelaporan', icon: FileText, path: '/reports' },
-  { label: 'Progress Lahan', icon: BarChart3, path: '/progress-lahan' },
+  { label: 'LAHAN', icon: BarChart3, path: '/progress-lahan' },
   { label: 'Monitoring CCTV', icon: Video, path: '/cctv' },
   { label: 'Analytics', icon: Globe, path: '/analytics' },
   { label: 'User Management', icon: Users, path: '/users' },

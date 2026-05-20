@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useResponsive } from '../utils/responsive';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, PieChart, Pie, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { 
@@ -30,6 +31,7 @@ import 'jspdf-autotable';
 const COLORS = ['#3B82F6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
 const AnggaranPemeliharaan = () => {
+  const { isMobile, isTablet } = useResponsive();
   const [budgetData, setBudgetData] = useState([]);
   const [stats, setStats] = useState({ totalAnggaran: 0, totalRealisasi: 0, totalSisa: 0, persentaseRealisasi: 0 });
   const [loading, setLoading] = useState(true);
@@ -395,6 +397,13 @@ const AnggaranPemeliharaan = () => {
 
   useEffect(() => {
     fetchData();
+
+    // Poll for real-time updates every 3 seconds
+    const interval = setInterval(() => {
+      fetchData();
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {
@@ -648,36 +657,47 @@ const AnggaranPemeliharaan = () => {
 
   try {
     return (
-      <div className="min-h-screen overflow-y-auto" style={{ background: 'linear-gradient(135deg, #0B1120 0%, #0F172A 50%, #111827 100%)' }}>
-        <div className="flex flex-col p-4 lg:p-6 gap-4">
-        {/* Header */}
-        <div className="glass-card p-6 rounded-2xl">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">Anggaran Pemeliharaan</h1>
-              <p className="text-[#94A3B8] text-sm">Monitoring Anggaran Pemeliharaan Jalan Tol</p>
-            </div>
-            <div className="flex gap-3">
+      <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #0B1120 0%, #0F172A 50%, #111827 100%)' }}>
+        <div className={`flex flex-col ${isMobile ? 'p-2' : 'p-4 lg:p-6'} gap-${isMobile ? '2' : '4'}`}>
+          {/* Header */}
+          <div className={`glass-card ${isMobile ? 'p-2' : 'p-6'} rounded-2xl`}>
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 lg:gap-4">
+              {/* Title - Minimized on mobile */}
+              {!isMobile && (
+                <div>
+                  <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">Anggaran Pemeliharaan</h1>
+                  <p className="text-[#94A3B8] text-sm">Monitoring Anggaran Pemeliharaan Jalan Tol</p>
+                </div>
+              )}
+
+              {/* Mobile: Just show icon */}
+              {isMobile && (
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-green-500" />
+                </div>
+              )}
+
+              <div className="flex gap-2 lg:gap-3">
               <button
                 onClick={fetchData}
-                className="flex items-center gap-2 px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-all duration-200 border border-[#3B82F6]/20"
+                className={`${isMobile ? 'p-2' : 'flex items-center gap-2 px-4 py-2'} bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 text-[#3B82F6] rounded-lg transition-all duration-200 border border-[#3B82F6]/20`}
               >
                 <RefreshCw className="w-4 h-4" />
-                <span className="text-sm font-medium">Refresh</span>
+                {!isMobile && <span className="text-sm font-medium">Refresh</span>}
               </button>
               <button
                 onClick={handleExportCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-[#10B981]/10 hover:bg-[#10B981]/20 text-[#10B981] rounded-lg transition-all duration-200 border border-[#10B981]/20"
+                className={`${isMobile ? 'p-2' : 'flex items-center gap-2 px-4 py-2'} bg-[#10B981]/10 hover:bg-[#10B981]/20 text-[#10B981] rounded-lg transition-all duration-200 border border-[#10B981]/20`}
               >
                 <Download className="w-4 h-4" />
-                <span className="text-sm font-medium">Export CSV</span>
+                {!isMobile && <span className="text-sm font-medium">Export CSV</span>}
               </button>
               <button
                 onClick={handleExportExcel}
-                className="flex items-center gap-2 px-4 py-2 bg-[#F59E0B]/10 hover:bg-[#F59E0B]/20 text-[#F59E0B] rounded-lg transition-all duration-200 border border-[#F59E0B]/20"
+                className={`${isMobile ? 'p-2' : 'flex items-center gap-2 px-4 py-2'} bg-[#F59E0B]/10 hover:bg-[#F59E0B]/20 text-[#F59E0B] rounded-lg transition-all duration-200 border border-[#F59E0B]/20`}
               >
                 <FileSpreadsheet className="w-4 h-4" />
-                <span className="text-sm font-medium">Download</span>
+                {!isMobile && <span className="text-sm font-medium">Download</span>}
               </button>
             </div>
           </div>

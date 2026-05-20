@@ -160,7 +160,7 @@ const ProgressMap = () => {
         <div>
           <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
             <MapIcon className="w-4 h-4 text-cyan-400" />
-            Sebaran Progress per Seksi
+            Sebaran Monitoring Progres Per Seksi
           </h2>
           <p className="text-[11px] text-slate-500 mt-0.5">
             Peta interaktif jalur Tol Becakayu dengan marker progress

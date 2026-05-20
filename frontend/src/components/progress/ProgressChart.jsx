@@ -57,7 +57,7 @@ const ProgressChart = ({ lahanData }) => {
         backdropFilter: 'blur(12px)',
       }}
     >
-      <h2 className="text-sm font-bold text-white mb-1 tracking-tight">Grafik Progress per Seksi</h2>
+      <h2 className="text-sm font-bold text-white mb-1 tracking-tight">Grafik Monitoring Progres Per Seksi</h2>
       <p className="text-[11px] text-slate-500 mb-4">Realisasi pengadaan tanah tiap seksi</p>
       <div className="w-full" style={{ height: 260 }}>
         <ResponsiveContainer width="100%" height="100%">

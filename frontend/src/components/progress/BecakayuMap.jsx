@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
-import { Search, Layers, Map as MapIcon, Maximize2, Download, Upload, ZoomIn } from 'lucide-react';
+import { Search, Layers, Map as MapIcon, Maximize2, Minimize2, Download, Upload } from 'lucide-react';
 import toGeoJSON from '@mapbox/togeojson';
 import shp from 'shpjs';
 import JSZip from 'jszip';
@@ -708,14 +708,15 @@ const BecakayuMap = ({ lahanData }) => {
     // Zoom to layer if it exists
   };
 
-  // Toggle fullscreen
+  // Toggle fullscreen - expands map card to fullscreen
   const toggleFullscreen = () => {
-    if (!isFullscreen) {
-      mapContainerRef.current?.requestFullscreen();
-    } else {
-      document.exitFullscreen();
-    }
     setIsFullscreen(!isFullscreen);
+    // Invalidate map size after a short delay to ensure proper rendering
+    setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    }, 300);
   };
 
   // Zoom in
@@ -772,7 +773,7 @@ const BecakayuMap = ({ lahanData }) => {
 
   return (
     <div
-      className="rounded-2xl overflow-hidden flex flex-col h-full transition-all duration-300"
+      className={`rounded-2xl overflow-hidden flex flex-col transition-all duration-300 ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : 'h-full'}`}
       style={{
         background: 'rgba(17,24,39,0.6)',
         border: '1px solid rgba(255,255,255,0.08)',
@@ -789,7 +790,7 @@ const BecakayuMap = ({ lahanData }) => {
             <h2 className="text-sm font-bold text-white tracking-tight">Peta Lokasi</h2>
             <p className="text-[10px] text-slate-500 mt-0.5">Visualisasi lokasi dan progres per seksi</p>
           </div>
-          
+
           {/* Upload GIS Button */}
           <div className="flex gap-2">
             <input
@@ -812,7 +813,7 @@ const BecakayuMap = ({ lahanData }) => {
             >
               {loading ? 'Uploading...' : 'Upload GIS'}
             </label>
-            
+
             {uploadedLayers.length > 0 && (
               <button
                 onClick={handleClearLayers}
@@ -832,10 +833,10 @@ const BecakayuMap = ({ lahanData }) => {
       </div>
 
       {/* Map */}
-      <div 
-        className={`relative rounded-2xl overflow-hidden flex-1 min-h-0 transition-all duration-300 ${isFullscreen ? 'rounded-none' : ''}`}
-        style={{ 
-          width: '100%', 
+      <div
+        className="relative rounded-2xl overflow-hidden flex-1 min-h-0 transition-all duration-300"
+        style={{
+          width: '100%',
           minHeight: '600px',
           border: showTooltip ? '2px solid rgba(59,130,246,0.6)' : '1px solid rgba(255,255,255,0.08)',
           boxShadow: showTooltip ? '0 0 20px rgba(59,130,246,0.4), 0 8px 32px rgba(0,0,0,0.3)' : '0 8px 32px rgba(0,0,0,0.3)',
@@ -869,6 +870,23 @@ const BecakayuMap = ({ lahanData }) => {
 
         {/* Zoom controls */}
         <div className="absolute top-3 right-3 flex flex-col gap-2 z-[1000]">
+          <button
+            onClick={toggleFullscreen}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white transition-all hover:scale-110 hover:shadow-lg"
+            style={{
+              background: 'linear-gradient(135deg, rgba(245,158,11,0.9), rgba(217,119,6,0.9))',
+              backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(245,158,11,0.4)',
+              boxShadow: '0 4px 16px rgba(245,158,11,0.3)',
+            }}
+            title={isFullscreen ? 'Keluar Fullscreen' : 'Fullscreen'}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="w-4 h-4" />
+            ) : (
+              <Maximize2 className="w-4 h-4" />
+            )}
+          </button>
           <button
             onClick={handleZoomIn}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-white transition-all hover:scale-110 hover:shadow-lg"
@@ -906,12 +924,12 @@ const BecakayuMap = ({ lahanData }) => {
 
         {/* Legend Section */}
         <div
-          className="absolute top-3 left-3 rounded-xl px-3 py-2 text-[9px] z-[1000]"
+          className="absolute top-3 left-3 rounded-xl px-3 py-2 text-[9px] z-[2000] transition-all duration-300"
           style={{
-            background: 'rgba(11,17,32,0.9)',
+            background: 'rgba(11,17,32,0.95)',
             backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
           }}
         >
           <p className="text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[8px]">Keterangan</p>

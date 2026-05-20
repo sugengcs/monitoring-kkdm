@@ -1,21 +1,26 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import L from 'leaflet';
-import api from '../utils/api';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useState, useEffect, useRef, createContext, useContext, useCallback, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard,
-  AlertTriangle,
-  Wrench,
-  CheckCircle,
-  TrendingUp,
-  Activity,
-  Map,
-  History,
-  Maximize2,
-  Minimize2,
-  Expand
+  Home, Map, FileText, Settings, LogOut,
+  RefreshCw, Download, Upload, Search,
+  Filter, ChevronDown, ChevronUp, Maximize2, Minimize2,
+  TrendingUp, AlertCircle, CheckCircle, Clock, AlertTriangle, Menu,
+  LayoutDashboard, Wrench, Activity, History, Expand, Bell
 } from 'lucide-react';
+import { useResponsive } from '../utils/responsive';
+import { useAuth } from '../contexts/AuthContext';
+import api from '../utils/api';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix Leaflet default icon issue
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
 import RepairReportSummary from '../components/RepairReportSummary';
 import ProfileDropdown from '../components/ProfileDropdown';
 import ProfileModal from '../components/ProfileModal';
@@ -114,6 +119,7 @@ const StatCard = ({ title, value, icon: Icon, color, gradient, onClick }) => (
 const Dashboard = () => {
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const { isMobile, isTablet } = useResponsive();
   const [stats, setStats] = useState(null);
   const [assets, setAssets] = useState([]);
   const [reports, setReports] = useState([]);
@@ -305,17 +311,29 @@ const Dashboard = () => {
     );
   };
 
+  // Reset condition filter to all conditions
+  const handleResetConditionFilter = () => {
+    console.log('[Dashboard] Resetting condition filter to all conditions');
+    const allConditions = CONDITION_FILTERS.map(f => f.key);
+    console.log('[Dashboard] Setting conditions to:', allConditions);
+    setSelectedConditions(allConditions);
+  };
+
   // Reset filter to all types + all conditions
   const handleResetFilter = () => {
+    console.log('[Dashboard] Resetting filters to default');
     setSelectedAssetTypes(['PERKERASAN', 'CCTV', 'LAMPU PJU', 'PANEL', 'KWH']);
     setSelectedConditions(CONDITION_FILTERS.map(f => f.key));
+    setSelectedMonth('');
+    setSelectedWeek('');
+    setSelectedYear('');
     
     if (mapInstanceRef.current) {
       if (isFullscreen) {
         // In fullscreen mode, zoom to show all markers
         const validPoints = filteredAssets
           .map(a => [parseFloat(a.location_lat), parseFloat(a.location_lng)])
-          .filter(([lat, lng]) => !isNaN(lat) && !isNaN(lng));
+          .filter(([lat, lng]) => !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180);
         
         if (validPoints.length > 0) {
           if (validPoints.length === 1) {
@@ -339,6 +357,7 @@ const Dashboard = () => {
     console.log('[Dashboard] Filtering assets:', {
       totalAssets: assets.length,
       selectedAssetTypes,
+      selectedConditions,
       selectedMonth,
       selectedWeek,
       selectedYear
@@ -349,25 +368,24 @@ const Dashboard = () => {
       const assetType = normalizeAssetType(asset.category_name);
       const matchType = assetType && selectedAssetTypes.includes(assetType);
 
-      if (!matchType) return false;
+      if (!matchType) {
+        return false;
+      }
 
       // Filter by condition
       const conditionMatch = selectedConditions.some(key => {
         const filter = CONDITION_FILTERS.find(f => f.key === key);
         return filter && filter.match(asset.condition_status);
       });
-      if (!conditionMatch) return false;
+      if (!conditionMatch) {
+        return false;
+      }
 
       // Filter by month
       if (selectedMonth) {
         const assetDate = new Date(asset.created_at || asset.installed_at);
         const assetMonth = assetDate.getMonth() + 1;
         if (assetMonth !== parseInt(selectedMonth)) {
-          console.log('[Dashboard] Asset filtered by month:', {
-            assetName: asset.name,
-            assetMonth,
-            selectedMonth
-          });
           return false;
         }
       }
@@ -377,11 +395,6 @@ const Dashboard = () => {
         const assetDate = new Date(asset.created_at || asset.installed_at);
         const weekNumber = Math.ceil(assetDate.getDate() / 7);
         if (weekNumber !== parseInt(selectedWeek)) {
-          console.log('[Dashboard] Asset filtered by week:', {
-            assetName: asset.name,
-            weekNumber,
-            selectedWeek
-          });
           return false;
         }
       }
@@ -391,11 +404,6 @@ const Dashboard = () => {
         const assetDate = new Date(asset.created_at || asset.installed_at);
         const assetYear = assetDate.getFullYear();
         if (assetYear !== parseInt(selectedYear)) {
-          console.log('[Dashboard] Asset filtered by year:', {
-            assetName: asset.name,
-            assetYear,
-            selectedYear
-          });
           return false;
         }
       }
@@ -413,28 +421,39 @@ const Dashboard = () => {
 
   // Calculate statistics from filtered assets
   const filteredStats = useMemo(() => {
+    // Use stats from API if available, otherwise calculate from filteredAssets
+    if (stats?.derived) {
+      return {
+        total: stats.totalAssets || 0,
+        baik: stats.derived.baik || 0,
+        rusak: stats.derived.rusak || 0,
+        sedangPerbaikan: stats.derived.sedangPerbaikan || 0,
+      };
+    }
+    
+    // Fallback to calculated from filteredAssets
     return {
       total: filteredAssets.length,
       baik: filteredAssets.filter(a => a.condition_status === 'baik' || a.condition_status === 'selesai_diperbaiki').length,
       rusak: filteredAssets.filter(a => a.condition_status === 'rusak_ringan' || a.condition_status === 'rusak_berat').length,
       sedangPerbaikan: filteredAssets.filter(a => a.condition_status === 'sedang_diperbaiki').length,
     };
-  }, [filteredAssets]);
+  }, [filteredAssets, stats]);
 
   useEffect(() => {
     fetchStats();
     fetchAssets();
     fetchReports();
 
-    // Poll for realtime updates every 2 seconds (faster sync)
+    // Poll for realtime updates every 30 seconds (reduced from 2 seconds to prevent excessive calls)
     const interval = setInterval(() => {
       fetchStats();
       fetchAssets();
       fetchReports();
-    }, 2000);
+    }, 30000);
 
     return () => clearInterval(interval);
-  }, [selectedMonth, selectedWeek, selectedYear]);
+  }, []);
 
   useEffect(() => {
     const handleOpenReportDetail = (event) => {
@@ -447,56 +466,75 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
-    const container = mapContainerRef.current;
-    const map = L.map(container, {
-      center: [-6.2347001, 106.9321978],
-      zoom: 6,
-      scrollWheelZoom: false,
-      dragging: true,
-      layers: [],
-    });
-
-    const baseLayers = {
-      'Topographic': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles &copy; Esri &mdash; Source: Esri &amp; the GIS User Community',
-        maxZoom: 19,
-      }),
-      'CartoDB Dark': L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 20,
-      }),
-    };
-
-    // Store base layers in ref
-    baseLayersRef.current = baseLayers;
     
-    // Add default base layer
-    baseLayers[selectedBaseMap].addTo(map);
-    mapInstanceRef.current = map;
+    const initializeMap = () => {
+      const container = mapContainerRef.current;
+      if (!container) return;
+      
+      console.log('[Dashboard] Initializing map, container:', container);
+      console.log('[Dashboard] Container dimensions:', container.offsetWidth, 'x', container.offsetHeight);
+      
+      if (container.offsetWidth === 0 || container.offsetHeight === 0) {
+        console.log('[Dashboard] Container has no dimensions, retrying...');
+        setTimeout(initializeMap, 100);
+        return;
+      }
+      
+      // Only initialize map once
+      if (!mapInstanceRef.current) {
+        const map = L.map(container, {
+          center: [-6.2347001, 106.9321978],
+          zoom: 6,
+          scrollWheelZoom: false,
+          dragging: true,
+          layers: [],
+          zoomControl: true,
+        });
 
-    // Force invalidateSize at multiple delays
-    const timers = [100, 300, 600, 1000, 2000].map(t =>
-      setTimeout(() => {
+        const baseLayers = {
+          'Topographic': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri &amp; the GIS User Community',
+            maxZoom: 19,
+          }),
+          'CartoDB Dark': L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20,
+          }),
+        };
+
+        baseLayersRef.current = baseLayers;
+        baseLayers[selectedBaseMap].addTo(map);
+        mapInstanceRef.current = map;
+        console.log('[Dashboard] Map initialized successfully');
+      }
+
+      // Force invalidateSize at multiple delays
+      const timers = [100, 300, 600, 1000, 2000].map(t =>
+        setTimeout(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize();
+            console.log('[Dashboard] invalidateSize at', t, 'ms');
+          }
+        }, t)
+      );
+
+      // Watch for container resize
+      const ro = new ResizeObserver(() => {
         if (mapInstanceRef.current) {
           mapInstanceRef.current.invalidateSize();
-          console.log('[Dashboard] invalidateSize at', t, 'ms');
+          console.log('[Dashboard] ResizeObserver triggered invalidateSize');
         }
-      }, t)
-    );
+      });
+      ro.observe(container);
 
-    // Watch for container resize
-    const ro = new ResizeObserver(() => {
-      if (mapInstanceRef.current) mapInstanceRef.current.invalidateSize();
-    });
-    ro.observe(container);
-
-    return () => {
-      timers.forEach(clearTimeout);
-      ro.disconnect();
-      map.remove();
-      mapInstanceRef.current = null;
+      return () => {
+        timers.forEach(clearTimeout);
+        ro.disconnect();
+      };
     };
+
+    setTimeout(initializeMap, 100);
   }, []);
 
   useEffect(() => {
@@ -504,51 +542,108 @@ const Dashboard = () => {
     if (!map) return;
 
     // Clear old markers
-    markersRef.current.forEach(m => map.removeLayer(m));
+    markersRef.current.forEach(m => {
+      if (map.hasLayer(m)) {
+        map.removeLayer(m);
+      }
+    });
     markersRef.current = [];
 
-    if (filteredAssets.length === 0) return;
+    console.log('[Dashboard] Rendering markers, filteredAssets count:', filteredAssets.length);
+    console.log('[Dashboard] Map instance:', map);
 
-    filteredAssets.forEach(asset => {
-      const lat = parseFloat(asset.location_lat);
-      const lng = parseFloat(asset.location_lng);
-      if (isNaN(lat) || isNaN(lng)) return;
+    if (filteredAssets.length === 0) {
+      console.log('[Dashboard] No filtered assets to display');
+      return;
+    }
 
-      const icon = createAssetIcon(asset.category_name, asset.condition_status);
-      const marker = L.marker([lat, lng], { icon }).addTo(map);
+    let validMarkers = 0;
+    let invalidMarkers = 0;
 
-      marker.bindTooltip(asset.category_name || asset.name, {
-        direction: 'top',
-        offset: [0, -14],
-        className: 'kml-layer-tooltip',
-      });
-      marker.bindPopup(createModernPopup(asset), { maxWidth: 280, className: '' });
-      markersRef.current.push(marker);
+    filteredAssets.forEach((asset, index) => {
+      // Use normalized coordinates from fetchAssets
+      const lat = asset._normalized_lat;
+      const lng = asset._normalized_lng;
+      
+      // Validate coordinates
+      if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(lat) || isNaN(lng)) {
+        console.log('[Dashboard] Skipping asset with invalid normalized coordinates:', {
+          index,
+          name: asset.name,
+          category: asset.category_name,
+          _normalized_lat: lat,
+          _normalized_lng: lng,
+          original_lat: asset.location_lat,
+          original_lng: asset.location_lng
+        });
+        invalidMarkers++;
+        return;
+      }
+
+      // Validate coordinate ranges
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        console.log('[Dashboard] Skipping asset with out-of-range normalized coordinates:', {
+          index,
+          name: asset.name,
+          lat,
+          lng
+        });
+        invalidMarkers++;
+        return;
+      }
+
+      try {
+        // Use custom asset icon with category colors
+        const icon = createAssetIcon(asset.category_name, asset.condition_status);
+        const marker = L.marker([lat, lng], { icon });
+        marker.addTo(map);
+
+        marker.bindTooltip(asset.category_name || asset.name, {
+          direction: 'top',
+          offset: [0, -14],
+          className: 'kml-layer-tooltip',
+        });
+        marker.bindPopup(createModernPopup(asset), { maxWidth: 280, className: '' });
+        markersRef.current.push(marker);
+        validMarkers++;
+        console.log('[Dashboard] Marker added for:', asset.category_name, 'at', lat, lng);
+      } catch (error) {
+        console.error('[Dashboard] Error adding marker for asset:', asset, error);
+        invalidMarkers++;
+      }
+    });
+
+    console.log('[Dashboard] Markers rendered:', {
+      valid: validMarkers,
+      invalid: invalidMarkers,
+      total: filteredAssets.length
     });
 
     const validPoints = filteredAssets
-      .map(a => [parseFloat(a.location_lat), parseFloat(a.location_lng)])
-      .filter(([lat, lng]) => !isNaN(lat) && !isNaN(lng));
+      .map(a => [a._normalized_lat, a._normalized_lng])
+      .filter(([lat, lng]) => lat !== undefined && lat !== null && lng !== undefined && lng !== null && !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180);
     
-    // Only auto-fit bounds if not in fullscreen mode
+    // Only auto-fit bounds if not in fullscreen mode and we have valid points
     if (!isFullscreen && validPoints.length > 0) {
       if (validPoints.length === 1) {
         map.setView(validPoints[0], 13);
+        console.log('[Dashboard] Map centered on single marker at:', validPoints[0]);
       } else {
         const bounds = L.latLngBounds(validPoints);
         map.fitBounds(bounds, { padding: [80, 80], maxZoom: 13, animate: true, duration: 1 });
+        console.log('[Dashboard] Map fitted to bounds for', validPoints.length, 'markers');
       }
     }
 
     // Re-invalidate after markers are drawn
     setTimeout(() => map.invalidateSize(), 200);
-  }, [filteredAssets]);
+  }, [filteredAssets, isFullscreen]);
 
   const fetchStats = async () => {
     try {
       console.log('[Dashboard] Fetching stats...');
       const response = await api.get('/dashboard/stats', {
-        params: { _t: Date.now() }
+        params: { month: selectedMonth, year: selectedYear || '', _t: Date.now() }
       });
       console.log('[Dashboard] API Response:', response.data);
       const statsData = response.data.data;
@@ -583,19 +678,59 @@ const Dashboard = () => {
 
   const fetchAssets = async () => {
     try {
-      const response = await api.get('/assets', { params: { month: selectedMonth, year: selectedYear || '', limit: 9999, _t: Date.now() } });
+      console.log('[Dashboard] Fetching assets...');
+      const response = await api.get('/assets', { params: { limit: 9999, _t: Date.now() } });
+      console.log('[Dashboard] ASSET API:', response.data);
+      
       let data = response.data.data || [];
-      // Apply week-of-month filter client-side (Minggu 1 = tanggal 1-7, dst)
-      if (selectedWeek) {
-        data = data.filter(asset => {
-          const date = new Date(asset.created_at || asset.installed_at);
-          const weekNumber = Math.ceil(date.getDate() / 7);
-          return weekNumber === parseInt(selectedWeek);
-        });
-      }
+      console.log('[Dashboard] TOTAL ASSETS:', data.length);
+      
+      // Normalize coordinate field names
+      data = data.map(asset => {
+        let lat, lng;
+        
+        // Try different field names for latitude
+        if (asset.location_lat !== undefined && asset.location_lat !== null) {
+          lat = asset.location_lat;
+        } else if (asset.latitude !== undefined && asset.latitude !== null) {
+          lat = asset.latitude;
+        } else if (asset.lat !== undefined && asset.lat !== null) {
+          lat = asset.lat;
+        } else if (asset.y !== undefined && asset.y !== null) {
+          lat = asset.y;
+        }
+        
+        // Try different field names for longitude
+        if (asset.location_lng !== undefined && asset.location_lng !== null) {
+          lng = asset.location_lng;
+        } else if (asset.longitude !== undefined && asset.longitude !== null) {
+          lng = asset.longitude;
+        } else if (asset.lng !== undefined && asset.lng !== null) {
+          lng = asset.lng;
+        } else if (asset.x !== undefined && asset.x !== null) {
+          lng = asset.x;
+        }
+        
+        // Handle comma vs decimal point
+        if (typeof lat === 'string') {
+          lat = parseFloat(lat.replace(',', '.'));
+        }
+        if (typeof lng === 'string') {
+          lng = parseFloat(lng.replace(',', '.'));
+        }
+        
+        return {
+          ...asset,
+          _normalized_lat: lat,
+          _normalized_lng: lng
+        };
+      });
+      
       setAssets(data);
+      console.log('[Dashboard] Assets set to state:', data.length, 'items');
     } catch (error) {
-      console.error('Error fetching assets:', error);
+      console.error('[Dashboard] Error fetching assets:', error);
+      console.error('[Dashboard] Error details:', error.response?.data);
     } finally {
       setLoading(false);
     }
@@ -796,25 +931,35 @@ const Dashboard = () => {
       {/* Header */}
       <div className={`flex-shrink-0 ${isFullscreen ? 'hidden' : ''}`}>
         <div
-          className="px-5 flex items-center justify-between gap-6"
+          className={`${isMobile ? 'px-2 py-1' : 'px-5'} flex items-center justify-between gap-2`}
           style={{
-            height: '72px',
+            minHeight: isMobile ? '44px' : '72px',
             background: 'rgba(20,25,40,0.88)',
             backdropFilter: 'blur(20px)',
-            borderRadius: '18px',
+            borderRadius: isMobile ? '8px' : '18px',
             border: '1px solid rgba(255,255,255,0.08)',
           }}
         >
-          {/* Title */}
-          <div className="flex items-center gap-3">
-            <div>
-              <h1 className="text-2xl font-bold text-white" style={{ textShadow: '0 0 20px rgba(59, 130, 246, 0.5)' }}>Dashboard</h1>
-              <p className="text-xs text-gray-400 font-medium">Monitoring Aset Jalan Tol Becakayu</p>
+          {/* Title - Minimized on mobile */}
+          {!isMobile && (
+            <div className="flex items-center gap-2">
+              <div>
+                <h1 className="text-2xl font-bold text-white" style={{ textShadow: '0 0 20px rgba(59, 130, 246, 0.5)' }}>Dashboard</h1>
+                <p className="text-xs text-gray-400 font-medium">Monitoring Aset Jalan Tol Becakayu</p>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Filters Container */}
-          <div className="flex items-center gap-6 flex-1 justify-center">
+          {/* Mobile: Just show icon */}
+          {isMobile && (
+            <div className="flex items-center gap-2">
+              <LayoutDashboard className="w-5 h-5 text-blue-500" />
+            </div>
+          )}
+
+          {/* Filters Container - Hidden on mobile */}
+          {!isMobile && (
+            <div className="flex items-center gap-6 flex-1 justify-center">
             {/* Jenis Aset Filters */}
             <div className="flex items-center gap-2">
               <button
@@ -869,12 +1014,7 @@ const Dashboard = () => {
 
             {/* Kondisi Filters */}
             <div className="flex items-center gap-2">
-              {[
-                { key: 'baik', label: 'Baik', color: '#22C55E' },
-                { key: 'sedang_perbaikan', label: 'Perbaikan', color: '#F59E0B' },
-                { key: 'rusak', label: 'Rusak', color: '#EF4444' },
-                { key: 'selesai_perbaikan', label: 'Selesai', color: '#3B82F6' },
-              ].map(({ key, label, color }) => {
+              {CONDITION_FILTERS.map(({ key, label, color }) => {
                 const isSelected = selectedConditions.includes(key);
                 return (
                   <button
@@ -899,8 +1039,29 @@ const Dashboard = () => {
                   </button>
                 );
               })}
+              
+              {/* Reset Condition Filter Button */}
+              <button
+                onClick={handleResetConditionFilter}
+                className="h-10 px-4 rounded-xl text-white font-semibold text-xs cursor-pointer transition-all duration-250 ease-out hover:-translate-y-0.5 border border-white/10"
+                style={{
+                  background: 'rgba(107,114,128,0.2)',
+                  boxShadow: '0 0 12px rgba(107,114,128,0.2)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(107,114,128,0.35)';
+                  e.currentTarget.style.boxShadow = '0 0 20px rgba(107,114,128,0.35)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(107,114,128,0.2)';
+                  e.currentTarget.style.boxShadow = '0 0 12px rgba(107,114,128,0.2)';
+                }}
+              >
+                Reset
+              </button>
             </div>
           </div>
+          )}
 
           {/* Fullscreen Button - Top Right Corner */}
           <button
@@ -927,7 +1088,7 @@ const Dashboard = () => {
       </div>
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 bg-[#0B1120] p-4' : 'p-2 sm:p-5'} gap-3 sm:gap-5`}>
+      <div className={`flex-1 flex flex-col overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 bg-[#0B1120] p-4' : isMobile ? 'p-2' : 'p-2 sm:p-4'} gap-${isMobile ? '2' : '2 sm:gap-3'}`}>
         {/* Statistics Cards - computed from filtered assets */}
         <div className={`flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 md:gap-4 ${isFullscreen ? 'bg-black/30 backdrop-blur-sm rounded-xl p-3' : ''}`}>
           <StatCard
@@ -974,11 +1135,11 @@ const Dashboard = () => {
 
         {/* Middle Section: Map */}
         <div className={`flex-1 min-h-0 ${isFullscreen ? 'flex-grow relative' : ''}`}>
-          <div className={`glass-card p-0 overflow-hidden relative h-full ${isFullscreen ? 'bg-transparent border-0' : ''}`}>
+          <div className={`glass-card p-0 overflow-hidden relative h-full ${isFullscreen ? 'bg-transparent border-0' : ''}`} style={{ minHeight: isFullscreen ? '100vh' : '400px' }}>
             <div
               ref={mapContainerRef}
               className="w-full h-full"
-              style={{ zIndex: 0, minHeight: isFullscreen ? '100vh' : '300px' }}
+              style={{ zIndex: 10, height: '100%', minHeight: isFullscreen ? '100vh' : '400px' }}
             />
             <MapLegend assets={filteredAssets} />
             
@@ -1044,6 +1205,27 @@ const Dashboard = () => {
                           />
                         );
                       })}
+                      
+                      {/* Reset Condition Filter Button */}
+                      <button
+                        onClick={handleResetConditionFilter}
+                        className="flex items-center gap-1 px-3 py-2 rounded-xl text-white font-semibold text-xs cursor-pointer transition-all duration-300 ease-out hover:scale-105 active:scale-95"
+                        style={{
+                          background: 'rgba(107,114,128,0.3)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          boxShadow: '0 0 8px rgba(107,114,128,0.2)',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(107,114,128,0.5)';
+                          e.currentTarget.style.boxShadow = '0 0 12px rgba(107,114,128,0.3)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(107,114,128,0.3)';
+                          e.currentTarget.style.boxShadow = '0 0 8px rgba(107,114,128,0.2)';
+                        }}
+                      >
+                        Reset
+                      </button>
                       
                       {/* Exit Fullscreen Button */}
                       <button

@@ -100,7 +100,7 @@ const ProgressSeksiCards = ({ lahanData }) => {
     >
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-sm font-bold text-white tracking-tight">Progress per Seksi</h2>
+          <h2 className="text-sm font-bold text-white tracking-tight">Monitoring Progres Per Seksi</h2>
           <p className="text-[10px] text-slate-500 mt-0.5">Realisasi pengadaan tanah tiap seksi</p>
         </div>
         <div className="h-6 w-px bg-gradient-to-b from-transparent via-slate-700 to-transparent"></div>
@@ -178,11 +178,11 @@ const ProgressSeksiCards = ({ lahanData }) => {
                 <div className="space-y-1.5 text-[10px]">
                   <div className="flex justify-between items-center">
                     <span className="text-slate-500 font-medium">Kebutuhan</span>
-                    <span className="text-white font-semibold">{seksi.kebutuhan.toLocaleString('id-ID')} m²</span>
+                    <span className="text-white font-semibold">{(seksi.kebutuhan / 10000).toFixed(2)} Ha</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-500 font-medium">Realisasi</span>
-                    <span className="font-semibold" style={{ color: colors.color }}>{seksi.realisasi.toLocaleString('id-ID')} m²</span>
+                    <span className="font-semibold" style={{ color: colors.color }}>{(seksi.realisasi / 10000).toFixed(2)} Ha</span>
                   </div>
                 </div>
               </div>

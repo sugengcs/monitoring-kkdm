@@ -35,7 +35,7 @@ const menuItems = [
   { path: '/repair-tracking', icon: Wrench, label: 'Status Perbaikan', roles: ['admin', 'teknisi'] },
   { path: '/anggaran-pemeliharaan', icon: DollarSign, label: 'Anggaran Pemeliharaan', roles: ['admin', 'teknisi', 'manager'] },
   { path: '/monitoring-spm-wtr', icon: FileText, label: 'Monitoring SPM WTR', roles: ['admin', 'teknisi', 'manager'] },
-  { path: '/progress-lahan', icon: MapPinned, label: 'Progress Lahan', roles: ['admin', 'teknisi', 'manager'] },
+  { path: '/progress-lahan', icon: MapPinned, label: 'LAHAN', roles: ['admin', 'teknisi', 'manager'] },
   { path: '/cctv', icon: Video, label: 'Monitoring CCTV', roles: ['admin', 'teknisi', 'manager'] },
   { path: '/analytics', icon: BarChart3, label: 'Analytics', roles: ['admin', 'manager'] },
   { path: '/users', icon: Users, label: 'User Management', roles: ['admin'] },
